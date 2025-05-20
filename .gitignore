@@ -5,6 +5,7 @@
 
 results/
 mattergen.egg-info/
+log.txt
 
 # User-specific files
 *.rsuser
