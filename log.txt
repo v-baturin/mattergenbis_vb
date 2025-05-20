@@ -1,4 +1,0 @@
-Generating 100 samples for Cu-Si-K
-cp: cannot create regular file '/Data/auguste.de-lambilly/mattergenbis/results/Vladimir/Cu-Si-K.zip': No such file or directory
-Duration: 1943 seconds
-Generating 100 samples for Cu-Si-P
