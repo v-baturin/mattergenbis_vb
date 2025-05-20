@@ -10,6 +10,7 @@ systems=(Cu-Si-K Cu-Si-P Mo-Si-K Mo-Si-P Mo-Si-B Mo-Si-B-P Si-B-P Mo-B-P
          Cu-Si Si-K Cu-K Cu-P Si-P Mo-Si Mo-K Mo-P Mo-B Si-B) 
          #Mo Cu Si K P B)
 mkdir -p /Data/auguste.de-lambilly/mattergenbis/$RESULTS_PATH
+mkdir -p $END_PATH
 
 for system in "${systems[@]}"; do
     echo "Generating $NB samples for $system"
