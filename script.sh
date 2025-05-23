@@ -17,7 +17,7 @@ for system in "${systems[@]}"; do
     start_time=$(date +%s)
     # Generate samples for each system
     mkdir -p /Data/auguste.de-lambilly/mattergenbis/$RESULTS_PATH$system
-    mattergen-generate "$RESULTS_PATH$system" --pretrained-name=$MODEL_NAME --batch_size=$NB --properties_to_condition_on="{'chemical_system':'$system'}" --diffusion_guidance_factor=2.0 > /Data/auguste.de-lambilly/mattergenbis/$RESULTS_PATH$system/log.txt 2>&1
+    mattergen-generate "$RESULTS_PATH$system" --pretrained-name=$MODEL_NAME --batch_size=$NB --properties_to_condition_on="{'chemical_system':'$system'}" --record_trajectories=False --diffusion_guidance_factor=2.0 > /Data/auguste.de-lambilly/mattergenbis/$RESULTS_PATH$system/log.txt 2>&1
     # Copy the generated samples to the end path
     cp -r "/Data/auguste.de-lambilly/mattergenbis/$RESULTS_PATH$system/generated_crystals_cif.zip" "$END_PATH/$system.zip"
     end_time=$(date +%s)
