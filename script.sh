@@ -22,7 +22,7 @@ for system in "${systems[@]}"; do
     cp -r "/Data/auguste.de-lambilly/mattergenbis/$RESULTS_PATH$system/generated_crystals_cif.zip" "$END_PATH/$system.zip"
     end_time=$(date +%s)
     duration=$((end_time - start_time))
-    echo "Duration: ${duration} seconds"
+    echo "Duration: ${duration} seconds at $(date +%H:%M:%S)"
 done
 
 # Zip the generated samples
