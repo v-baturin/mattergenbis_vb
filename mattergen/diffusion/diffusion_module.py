@@ -177,3 +177,12 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
 
     def _get_device(self, batch: T) -> torch.device:
         return next(batch[k].device for k in self.corruption.sdes.keys())
+
+    def set_diffusion_loss(
+        self,
+        diffusion_loss_fn: Callable[[T, torch.Tensor], torch.Tensor],
+        diffusion_loss_weight: float = 1.0,
+    ):
+        """Set or update the diffusion loss function and its weight after the module has been initialized."""
+        self.diffusion_loss_fn = diffusion_loss_fn
+        self.diffusion_loss_weight = diffusion_loss_weight
