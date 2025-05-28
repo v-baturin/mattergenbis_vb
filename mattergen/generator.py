@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from zipfile import ZipFile
+from typing import Callable
 
 import ase.io
 import hydra
@@ -182,6 +183,11 @@ class CrystalGenerator:
     diffusion_guidance_factor: float = 0.0
     properties_to_condition_on: TargetProperty | None = None
 
+    # Loss function for universal diffusion guidance 
+    diffusion_loss_fn: Callable | None = None  # NEW
+    diffusion_loss_weight: float = 1.0         # NEW
+   
+
     # Additional overrides, only has an effect when using a diffusion-codebase model
     sampling_config_overrides: list[str] | None = None
 
@@ -342,11 +348,15 @@ class CrystalGenerator:
         num_batches: int | None = None,
         target_compositions_dict: list[dict[str, float]] | None = None,
         output_dir: str = "outputs",
+        diffusion_loss_fn: Callable | None = None,  # NEW
+        diffusion_loss_weight: float = 1.0,         # NEW
     ) -> list[Structure]:
         # Prioritize the runtime provided batch_size, num_batches and target_compositions_dict
         batch_size = batch_size or self.batch_size
         num_batches = num_batches or self.num_batches
         target_compositions_dict = target_compositions_dict or self.target_compositions_dict
+        diffusion_loss_fn = diffusion_loss_fn if diffusion_loss_fn is not None else self.diffusion_loss_fn # NEW
+        diffusion_loss_weight = diffusion_loss_weight if diffusion_loss_weight is not None else self.diffusion_loss_weight # NEW
         assert batch_size is not None
         assert num_batches is not None
 
@@ -366,6 +376,11 @@ class CrystalGenerator:
 
         sampler_partial = instantiate(sampling_config.sampler_partial)
         sampler = sampler_partial(pl_module=self.model)
+
+        #---NEW
+        if diffusion_loss_fn is not None:
+            sampler.diffusion_module.set_diffusion_loss(diffusion_loss_fn, diffusion_loss_weight)
+        #---END NEW
 
         generated_structures = draw_samples_from_sampler(
             sampler=sampler,
