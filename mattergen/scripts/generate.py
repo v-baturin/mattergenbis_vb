@@ -3,7 +3,7 @@
 
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Callable
 
 import fire
 
@@ -28,6 +28,8 @@ def main(
     diffusion_guidance_factor: float | None = None,
     strict_checkpoint_loading: bool = True,
     target_compositions: list[dict[str, int]] | None = None,
+    diffusion_loss_fn: Callable | None = None,
+    diffusion_loss_weight: float = 1.0,
 ):
     """
     Evaluate diffusion model against molecular metrics.
@@ -45,6 +47,7 @@ def main(
         strict_checkpoint_loading: Whether to raise an exception when not all parameters from the checkpoint can be matched to the model.
         target_compositions: List of dictionaries with target compositions to condition on. Each dictionary should have the form `{element: number_of_atoms}`. If None, the target compositions are not conditioned on.
            Only supported for models trained for crystal structure prediction (CSP) (default: None)
+        diffusion_loss
 
     NOTE: When specifying dictionary values via the CLI, make sure there is no whitespace between the key and value, e.g., `--properties_to_condition_on={key1:value1}`.
     """
@@ -93,6 +96,8 @@ def main(
             diffusion_guidance_factor if diffusion_guidance_factor is not None else 0.0
         ),
         target_compositions_dict=target_compositions,
+        diffusion_loss_fn=diffusion_loss_fn,           # NEW
+        diffusion_loss_weight=diffusion_loss_weight,   # NEW
     )
     generator.generate(output_dir=Path(output_path))
 
