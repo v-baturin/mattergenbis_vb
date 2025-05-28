@@ -22,7 +22,10 @@ def identity(x: T) -> T:
 
 
 class DiffusionModule(torch.nn.Module, Generic[T]):
-    """Denoising diffusion model for a multi-part state"""
+    """Denoising diffusion model for a multi-part state
+    diffusion_loss_fn: Loss function that is used for the universal diffusion guidance
+    diffusion_loss_weight: Weight for the diffusion loss (theorelically should be 1.0)  
+    """
 
     def __init__(
         self,
@@ -31,6 +34,8 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
         loss_fn: Loss,
         pre_corruption_fn: BatchTransform | None = None,
         timestep_sampler: TimestepSampler | None = None,
+        diffusion_loss_fn: Callable[[T, torch.Tensor], torch.Tensor] | None = None,
+        diffusion_loss_weight: float = 1.0, 
     ) -> None:
         super().__init__()
         self.model = model
@@ -43,6 +48,8 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
             min_t=1e-5,
             max_t=corruption.T,
         )
+        self.diffusion_loss_fn = diffusion_loss_fn  
+        self.diffusion_loss_weight = diffusion_loss_weight  
 
         # Check corruption for nn.Modules and register them here.
         self._register_corruption_modules()
@@ -137,6 +144,20 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
             model_target=self.model_targets,
             batch_idx=self.corruption._get_batch_indices(x),
         )
+
+        # --- NEW: Diffusion loss gradient modification ---
+        if self.diffusion_loss_fn is not None:
+            x_for_grad = x.clone().detach().requires_grad_(True)
+            diffusion_loss = self.diffusion_loss_fn(x_for_grad, t)
+            grad = torch.autograd.grad(
+                diffusion_loss, x_for_grad, 
+                grad_outputs=torch.ones_like(diffusion_loss), 
+                create_graph=True
+            )[0]
+            # Modify scores by subtracting the weighted grad
+            for k in scores:
+                scores[k] = scores[k] - self.diffusion_loss_weight * grad[k]
+        # --- END NEW ---
 
         return model_out.replace(**scores)
 
