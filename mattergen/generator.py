@@ -10,7 +10,6 @@ from typing import Callable
 
 import ase.io
 import hydra
-import torch
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from pymatgen.core.structure import Structure

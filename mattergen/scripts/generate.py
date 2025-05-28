@@ -3,7 +3,9 @@
 
 import os
 from pathlib import Path
-from typing import Literal, Callable
+from typing import Literal
+from mattergen.diffusion.diffusion_loss import make_combined_loss
+
 
 import fire
 
@@ -28,7 +30,7 @@ def main(
     diffusion_guidance_factor: float | None = None,
     strict_checkpoint_loading: bool = True,
     target_compositions: list[dict[str, int]] | None = None,
-    diffusion_loss_fn: Callable | None = None,
+    guidance: dict | None = None,
     diffusion_loss_weight: float = 1.0,
 ):
     """
@@ -83,6 +85,20 @@ def main(
             strict_checkpoint_loading=strict_checkpoint_loading,
         )
     _sampling_config_path = Path(sampling_config_path) if sampling_config_path is not None else None
+
+    loss_fn = None
+    if guidance is not None:
+        # Ensure guidance is a dictionary with string keys and numeric values
+        if not isinstance(guidance, dict) or not all(
+            isinstance(k, str) and (isinstance(v, (int, float)) or isinstance(v, list))
+            for k, v in guidance.items()
+        ):
+            raise ValueError(
+                "Guidance must be a dictionary with string keys and numeric values or lists."
+            )
+        # Create the combined loss function based on the provided guidance
+        loss_fn = make_combined_loss(guidance)
+
     generator = CrystalGenerator(
         checkpoint_info=checkpoint_info,
         properties_to_condition_on=properties_to_condition_on,
@@ -96,7 +112,7 @@ def main(
             diffusion_guidance_factor if diffusion_guidance_factor is not None else 0.0
         ),
         target_compositions_dict=target_compositions,
-        diffusion_loss_fn=diffusion_loss_fn,           # NEW
+        diffusion_loss_fn=loss_fn,           # NEW
         diffusion_loss_weight=diffusion_loss_weight,   # NEW
     )
     generator.generate(output_dir=Path(output_path))
