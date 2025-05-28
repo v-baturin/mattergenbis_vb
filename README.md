@@ -61,7 +61,8 @@ git lfs install
 
 ## Get started with a pre-trained model
 We provide checkpoints of an unconditional base version of MatterGen as well as fine-tuned models for these properties:
-* `mattergen_base`: unconditional base model
+* `mattergen_base`: unconditional base model trained on Alex-MP-20
+* `mp_20_base`: unconditional base model trained on MP-20
 * `chemical_system`: fine-tuned model conditioned on chemical system
 * `space_group`: fine-tuned model conditioned on space group
 * `dft_mag_density`: fine-tuned model conditioned on magnetic density from DFT

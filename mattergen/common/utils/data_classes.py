@@ -22,6 +22,7 @@ PRETRAINED_MODEL_NAME = Literal[
     "ml_bulk_modulus",
     "dft_mag_density_hhi_score",
     "chemical_system_energy_above_hull",
+    "mp_20_base",
 ]
 
 
