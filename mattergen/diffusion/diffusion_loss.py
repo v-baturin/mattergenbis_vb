@@ -12,16 +12,23 @@ def l1_distance_loss(x, t, target):
 
 def volume(x, t, target):
     """
-    Example volume loss function : compute the absolute difference between the actual volume and the targeted one
+    Batched volume loss: computes the absolute difference between each actual volume and the target.
+    x.cell: [N, 3, 3]
+    target: float
+    Returns: [N] tensor of losses
     """
     assert isinstance(x, ChemGraph), "x must be a ChemGraph object"
-    cell = x.cell  # shape: [1, 3, 3]
+    cell = x.cell  # shape: [B, 3, 3]
     if cell is None:
         raise ValueError("ChemGraph has no cell attribute set.")
-    cell = cell.squeeze(0)  # shape: [3, 3]
-    a, b, c = cell[0], cell[1], cell[2]  # lattice vectors
-    vol = torch.abs(torch.dot(a, torch.cross(b, c)))
-    return torch.abs(vol - target)
+    # a, b, c: [N, 3]
+    a, b, c = cell[:, 0, :], cell[:, 1, :], cell[:, 2, :]
+    # dot(a, cross(b, c)): [N]
+    # cross(b, c): [N, 3]
+    vol = torch.abs(torch.sum(a * torch.cross(b, c, dim=1), dim=1))
+    # Ensure target is broadcastable
+    target_tensor = torch.as_tensor(target, dtype=vol.dtype, device=vol.device)
+    return torch.abs(vol - target_tensor)
 
 def make_combined_loss(guidance_dict: dict) -> callable:
     """
@@ -39,13 +46,6 @@ def make_combined_loss(guidance_dict: dict) -> callable:
         partial_losses.append(partial(base_loss, target=target))
     def combined_loss(x, t):
     #TODO: Verify that a simple sum is appropriate for combining the losses
-        # If x is a list or tuple, apply losses to each ChemGraph and sum
-        if isinstance(x, (list, tuple)):
-            return sum(
-                sum(loss(xi, t) for loss in partial_losses)
-                for xi in x
-            )
-        # Otherwise, assume x is a single ChemGraph
         return sum(loss(x, t) for loss in partial_losses)
     return combined_loss
 
