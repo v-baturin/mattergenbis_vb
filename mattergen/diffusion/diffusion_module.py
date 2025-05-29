@@ -160,14 +160,14 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
 
         # --- NEW: Diffusion loss gradient modification ---
         if self.diffusion_loss_fn is not None:
-            x_for_grad = x.clone().detach()
-
-            # Set requires_grad=True for all relevant fields at once
+                        # Set requires_grad=True for all relevant fields at once
             replace_kwargs = {}
             for field in ["cell", "pos"]:
-                if hasattr(x_for_grad, field) and getattr(x_for_grad, field) is not None:
-                    replace_kwargs[field] = getattr(x_for_grad, field).clone().detach().requires_grad_(True)
-            x_for_grad = x_for_grad.replace(**replace_kwargs)
+                if hasattr(x, field) and getattr(x, field) is not None:
+                    replace_kwargs[field] = getattr(x, field).clone().detach().requires_grad_(True)
+            x_for_grad = x.replace(**replace_kwargs)
+
+            print("x_for_grad:", x_for_grad, "\n","cell:",x_for_grad.cell, "\n","pos:",x_for_grad.pos)
 
             grad_dict = {}
             diffusion_loss = self.diffusion_loss_fn(x_for_grad, t).requires_grad_(True)

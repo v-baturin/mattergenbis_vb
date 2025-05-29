@@ -29,3 +29,5 @@ done
 cd /Data/auguste.de-lambilly/mattergenbis/results/
 zip -r "Vladimir.zip" "Vladimir"
 echo "Zipped the generated samples to $END_PATH.zip"
+
+#mattergen-generate "results/chemical_system/Pd-Ni-H"   --pretrained-name=chemical_system   --batch_size=5   --properties_to_condition_on="{'chemical_system':'Pd-Ni-H'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0   --guidance="{'volume': 30.935}"   --diffusion_loss_weight=1
