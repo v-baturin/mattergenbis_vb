@@ -12,7 +12,7 @@ from mattergen.diffusion.model_target import ModelTarget
 from mattergen.diffusion.model_utils import convert_model_out_to_score
 from mattergen.diffusion.score_models.base import ScoreModel
 from mattergen.diffusion.timestep_samplers import TimestepSampler, UniformTimestepSampler
-from mattergen.common.data.chemgraph import ChemGraph
+from mattergen.common.data.chemgraph import ChemGraph, ChemGraphBatch
 
 T = TypeVar("T", bound=BatchedData)
 BatchTransform = Callable[[T], T]
@@ -161,16 +161,21 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
         # --- NEW: Diffusion loss gradient modification ---
         if self.diffusion_loss_fn is not None:
                         # Set requires_grad=True for all relevant fields at once
-            replace_kwargs = {}
-            for field in ["cell", "pos"]:
-                if hasattr(x, field) and getattr(x, field) is not None:
-                    replace_kwargs[field] = getattr(x, field).clone().detach().requires_grad_(True)
-            x_for_grad = x.replace(**replace_kwargs)
+            replace_kwargs = ["pos", "cell"]
+            # Create a new ChemGraphBatch with requires_grad=True for pos and cell         
+            x_for_grad = ChemGraphBatch(
+                atomic_numbers=x.atomic_numbers,
+                pos=x.pos.clone().detach().requires_grad_(True),
+                cell=x.cell.clone().detach().requires_grad_(True),
+                batch=x.batch,
+            )
 
-            print("x_for_grad:", x_for_grad, "\n","cell:",x_for_grad.cell, "\n","pos:",x_for_grad.pos)
+            print("cell:",x_for_grad.cell.requires_grad, "\n","pos:",x_for_grad.pos.requires_grad)
 
             grad_dict = {}
-            diffusion_loss = self.diffusion_loss_fn(x_for_grad, t).requires_grad_(True)
+            diffusion_loss = self.diffusion_loss_fn(x_for_grad, t)
+            diffusion_loss = diffusion_loss + 0.0 * x_for_grad.cell.sum()
+            print("Diffusion loss:", diffusion_loss.grad_fn)
             for field in replace_kwargs:
                 grad = torch.autograd.grad(
                     diffusion_loss, getattr(x_for_grad, field),
@@ -178,12 +183,17 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
                     create_graph=True,
                     allow_unused=True
                 )[0]
+                if grad is None:
+                    grad = torch.zeros_like(getattr(x_for_grad, field))
+                print(f"Gradient for {field}:", grad)
                 grad_dict[field] = grad
+            # Ensure that the gradients are detached from the computation graph
             
             print("------------------------------\n",
                    "Diffusion loss gradient:", grad_dict, "\n",
-                   "Diffusion loss function:", self.diffusion_loss_fn(g,None), "\n",
+                   "Diffusion loss function:", self.diffusion_loss_fn(x_for_grad,None), "\n",
                    self.diffusion_loss_fn,"\n------------------------------")
+            print("scores:", scores, "\n",)
             for k in grad_dict:
                 if k in scores:
                     scores[k] = scores[k] - self.diffusion_loss_weight * grad_dict[k]
