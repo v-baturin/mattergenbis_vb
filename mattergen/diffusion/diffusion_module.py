@@ -170,12 +170,12 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
                 batch=x.batch,
             )
 
-            print("cell:",x_for_grad.cell.requires_grad, "\n","pos:",x_for_grad.pos.requires_grad)
+            #print("cell:",x_for_grad.cell.requires_grad, "\n","pos:",x_for_grad.pos.requires_grad)
 
             grad_dict = {}
             with torch.autograd.set_grad_enabled(True):
                 diffusion_loss = self.diffusion_loss_fn(x_for_grad, t)
-            print("Diffusion loss:", diffusion_loss.grad_fn)
+            #print("Diffusion loss:", diffusion_loss.grad_fn)
             for field in replace_kwargs:
                 grad = torch.autograd.grad(
                     diffusion_loss, getattr(x_for_grad, field),
@@ -185,15 +185,15 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
                 )[0]
                 if grad is None:
                     grad = torch.zeros_like(getattr(x_for_grad, field))
-                print(f"Gradient for {field}:", grad)
+                #print(f"Gradient for {field}:", grad)
                 grad_dict[field] = grad
             # Ensure that the gradients are detached from the computation graph
             
-            print("------------------------------\n",
-                   "Diffusion loss gradient:", grad_dict, "\n",
-                   "Diffusion loss function:", self.diffusion_loss_fn(x_for_grad,None), "\n",
-                   self.diffusion_loss_fn,"\n------------------------------")
-            print("scores:", scores, "\n",)
+            #print("------------------------------\n",
+            #       "Diffusion loss gradient:", grad_dict, "\n",
+            #       "Diffusion loss function:", self.diffusion_loss_fn(x_for_grad,None), "\n",
+            #      self.diffusion_loss_fn,"\n------------------------------", "\n",
+            #      "scores:", scores, "\n",)
             for k in grad_dict:
                 if k in scores:
                     scores[k] = scores[k] - self.diffusion_loss_weight * grad_dict[k]

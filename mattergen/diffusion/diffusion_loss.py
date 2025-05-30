@@ -27,9 +27,6 @@ def volume(x, t, target):
     # cross(b, c): [N, 3]
     vol = torch.abs(torch.sum(a * torch.cross(b, c, dim=1), dim=1))
     # Ensure target is broadcastable
-    print("IN LOSS: cell requires_grad:", x.cell.requires_grad)
-    print("IN LOSS: cell is_leaf:", x.cell.is_leaf)
-    print("IN LOSS: cell id:", id(x.cell))
     target_tensor = torch.as_tensor(target, dtype=vol.dtype, device=vol.device)
     loss = torch.abs(vol - target_tensor)
     return loss
