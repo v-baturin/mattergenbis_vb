@@ -173,8 +173,8 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
             print("cell:",x_for_grad.cell.requires_grad, "\n","pos:",x_for_grad.pos.requires_grad)
 
             grad_dict = {}
-            diffusion_loss = self.diffusion_loss_fn(x_for_grad, t)
-            diffusion_loss = diffusion_loss + 0.0 * x_for_grad.cell.sum()
+            with torch.autograd.set_grad_enabled(True):
+                diffusion_loss = self.diffusion_loss_fn(x_for_grad, t)
             print("Diffusion loss:", diffusion_loss.grad_fn)
             for field in replace_kwargs:
                 grad = torch.autograd.grad(
