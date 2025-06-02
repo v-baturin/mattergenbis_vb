@@ -162,11 +162,21 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
         if self.diffusion_loss_fn is not None:
                         # Set requires_grad=True for all relevant fields at once
             replace_kwargs = ["pos", "cell"]
-            # Create a new ChemGraphBatch with requires_grad=True for pos and cell         
+
+            # Estimate x_0_hat for pos and cell using the Ancestral Sampling Formula
+            x0_hat = {}
+            for field in replace_kwargs:
+                # Get SDE for the relevant field 
+                sde = getattr(self.corruption.sdes,field)  
+                # Get alpha_t and sigma_t for the current t
+                alpha_t, sigma_t = sde.mean_coeff_and_std(x=x, t=t, batch_idx=None, batch=None)
+                x0_hat[field] = (x.pos + sigma_t**2 * getattr(scores, field)) / alpha_t
+
+            # Create a new ChemGraphBatch estimating x0 with requires_grad=True for pos and cell    
             x_for_grad = ChemGraphBatch(
                 atomic_numbers=x.atomic_numbers,
-                pos=x.pos.clone().detach().requires_grad_(True),
-                cell=x.cell.clone().detach().requires_grad_(True),
+                pos=x0_hat.pos.clone().detach().requires_grad_(True),
+                cell=x0_hat.cell.clone().detach().requires_grad_(True),
                 batch=x.batch,
             )
 
