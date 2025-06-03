@@ -120,9 +120,9 @@ def main(
 
 def _main():
     # use fire instead of argparse to allow for the specification of dictionary values via the CLI
-    fire.Fire(main)
+    #fire.Fire(main)
     #this line is for debugging purposes, to run the script directly
-    #fire.Fire(main, command='"results/chemical_system/Pd-Ni-H"   --pretrained-name=chemical_system   --batch_size=1   --properties_to_condition_on="{\'chemical_system\':\'Pd-Ni-H\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0   --guidance="{\'volume\': 30.935}"   --diffusion_loss_weight=1')
+    fire.Fire(main, command='"results/chemical_system/Pd-Ni-H_test"   --pretrained-name=chemical_system   --batch_size=1   --properties_to_condition_on="{\'chemical_system\':\'Pd-Ni-H\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0   --guidance="{\'volume\': 30.935}"   --diffusion_loss_weight=1')
 
 
 if __name__ == "__main__":

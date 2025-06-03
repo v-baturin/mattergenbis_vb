@@ -169,14 +169,14 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
                 # Get SDE for the relevant field 
                 sde = getattr(self.corruption.sdes,field)  
                 # Get alpha_t and sigma_t for the current t
-                alpha_t, sigma_t = sde.mean_coeff_and_std(x=x, t=t, batch_idx=None, batch=None)
-                x0_hat[field] = (x.pos + sigma_t**2 * getattr(scores, field)) / alpha_t
+                alpha_t, sigma_t = sde.mean_coeff_and_std(x=getattr(x, field), t=t, batch_idx=self.corruption._get_batch_indices(x)[field], batch=x)
+                x0_hat[field] = (getattr(x, field) + sigma_t**2 * scores[field]) / alpha_t
 
             # Create a new ChemGraphBatch estimating x0 with requires_grad=True for pos and cell    
             x_for_grad = ChemGraphBatch(
                 atomic_numbers=x.atomic_numbers,
-                pos=x0_hat.pos.clone().detach().requires_grad_(True),
-                cell=x0_hat.cell.clone().detach().requires_grad_(True),
+                pos=x0_hat["pos"].clone().detach().requires_grad_(True),
+                cell=x0_hat["cell"].clone().detach().requires_grad_(True),
                 batch=x.batch,
             )
 
