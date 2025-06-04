@@ -123,7 +123,7 @@ def repeat_blocks(
     """
     assert sizes.dim() == 1
     assert all(sizes >= 0)
-
+ 
     # Remove 0 sizes
     sizes_nonzero = sizes > 0
     if not torch.all(sizes_nonzero):
@@ -149,6 +149,10 @@ def repeat_blocks(
     else:
         assert repeats >= 0
         insert_dummy = False
+
+    # Check that sizes and repeats are not empty
+    if sizes.numel() == 0 or repeats == 0:
+        return sizes.new_empty(0, dtype=torch.long)
 
     # Get repeats for each group using group lengths/sizes
     r1 = torch.repeat_interleave(torch.arange(len(sizes), device=sizes.device), repeats)

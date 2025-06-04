@@ -32,6 +32,7 @@ def main(
     target_compositions: list[dict[str, int]] | None = None,
     guidance: dict | None = None,
     diffusion_loss_weight: float = 1.0,
+    print_loss: bool = False,
 ):
     """
     Evaluate diffusion model against molecular metrics.
@@ -114,17 +115,18 @@ def main(
         target_compositions_dict=target_compositions,
         diffusion_loss_fn=loss_fn,           # NEW
         diffusion_loss_weight=diffusion_loss_weight,   # NEW
+        print_loss=print_loss,  # NEW
     )
     generator.generate(output_dir=Path(output_path))
 
 
 def _main():
     # use fire instead of argparse to allow for the specification of dictionary values via the CLI
-    #fire.Fire(main)
+    fire.Fire(main)
     #this line is for debugging purposes, to run the script directly
-    fire.Fire(main, command='"results/chemical_system/Pd-Ni-H_test"   --pretrained-name=chemical_system   --batch_size=1   --properties_to_condition_on="{\'chemical_system\':\'Pd-Ni-H\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0   --guidance="{\'volume\': 30.935}"   --diffusion_loss_weight=1')
+    #fire.Fire(main, command='"results/chemical_system/Pd-Ni-H_test"   --pretrained-name=chemical_system   --batch_size=1   --properties_to_condition_on="{\'chemical_system\':\'Pd-Ni-H\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0   --guidance="{\'volume\': 30.935}"   --diffusion_loss_weight=1')
 
 
 if __name__ == "__main__":
     _main()
-#mattergen-generate "results/chemical_system/Pd-Ni-H"   --pretrained-name=chemical_system   --batch_size=1   --properties_to_condition_on="{'chemical_system':'Pd-Ni-H'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0   --guidance="{'volume': 30.935}"   --diffusion_loss_weight=1
+#mattergen-generate "results/chemical_system/Pd-Ni-H_test"   --pretrained-name=chemical_system   --batch_size=1   --properties_to_condition_on="{'chemical_system':'Pd-Ni-H'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0   --guidance="{'volume': 30.935}"   --diffusion_loss_weight=1   --print_loss=True

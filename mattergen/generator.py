@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from zipfile import ZipFile
 from typing import Callable
+import matplotlib.pyplot as plt
 
 import ase.io
 import hydra
@@ -41,6 +42,7 @@ def draw_samples_from_sampler(
     output_path: Path | None = None,
     cfg: DictConfig | None = None,
     record_trajectories: bool = True,
+    print_loss: bool = False,  # NEW
 ) -> list[Structure]:
 
     # Dict
@@ -51,6 +53,8 @@ def draw_samples_from_sampler(
 
     all_samples_list = []
     all_trajs_list = []
+    sampler.diffusion_module.print_loss_history = print_loss  # NEW
+
     for conditioning_data, mask in tqdm(condition_loader, desc="Generating samples"):
 
         # generate samples
@@ -64,6 +68,20 @@ def draw_samples_from_sampler(
     assert isinstance(all_samples, ChemGraph)
     lengths, angles = lattice_matrix_to_params_torch(all_samples.cell)
     all_samples = all_samples.replace(lengths=lengths, angles=angles)
+
+    # Save and print the diffusion loss history
+    if print_loss:
+        sampler.diffusion_module.save_diffusion_loss_history(
+            output_path / "diffusion_loss_history.txt"
+        )
+        plt.figure(figsize=(8, 4))
+        plt.plot(sampler.diffusion_module.diffusion_loss_history, label="Diffusion Loss")
+        plt.xlabel("Step")
+        plt.ylabel("Diffusion Loss")
+        plt.title("Diffusion Loss History")
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
 
     generated_strucs = structure_from_model_output(
         all_samples["pos"].reshape(-1, 3),
@@ -185,6 +203,7 @@ class CrystalGenerator:
     # Loss function for universal diffusion guidance 
     diffusion_loss_fn: Callable | None = None  # NEW
     diffusion_loss_weight: float = 1.0         # NEW
+    print_loss: bool = False # NEW
    
 
     # Additional overrides, only has an effect when using a diffusion-codebase model
@@ -388,6 +407,7 @@ class CrystalGenerator:
             output_path=Path(output_dir),
             properties_to_condition_on=self.properties_to_condition_on,
             record_trajectories=self.record_trajectories,
+            print_loss=self.print_loss,  # NEW
         )
 
         return generated_structures

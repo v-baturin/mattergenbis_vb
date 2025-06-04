@@ -4,6 +4,7 @@
 from typing import Callable, Generic, TypeVar
 
 import torch
+import json
 
 from mattergen.diffusion.corruption.multi_corruption import MultiCorruption, apply
 from mattergen.diffusion.data.batched_data import BatchedData
@@ -48,7 +49,7 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
         pre_corruption_fn: BatchTransform | None = None,
         timestep_sampler: TimestepSampler | None = None,
         diffusion_loss_fn: Callable[[T, torch.Tensor], torch.Tensor] | None = None,
-        diffusion_loss_weight: float = 1.0, 
+        diffusion_loss_weight: float = 1.0,
     ) -> None:
         super().__init__()
         self.model = model
@@ -62,7 +63,9 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
             max_t=corruption.T,
         )
         self.diffusion_loss_fn = diffusion_loss_fn  
-        self.diffusion_loss_weight = diffusion_loss_weight  
+        self.diffusion_loss_weight = diffusion_loss_weight 
+        self.diffusion_loss_history = [] # To keep track of diffusion loss values
+        self.print_loss_history = False  # Flag to control printing of loss history
 
         # Check corruption for nn.Modules and register them here.
         self._register_corruption_modules()
@@ -185,7 +188,10 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
             grad_dict = {}
             with torch.autograd.set_grad_enabled(True):
                 diffusion_loss = self.diffusion_loss_fn(x_for_grad, t)
-            #print("Diffusion loss:", diffusion_loss.grad_fn)
+            
+            if self.print_loss_history:
+                self.diffusion_loss_history.append(diffusion_loss.cpu().tolist())
+                
             for field in replace_kwargs:
                 grad = torch.autograd.grad(
                     diffusion_loss, getattr(x_for_grad, field),
@@ -198,7 +204,7 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
                 #print(f"Gradient for {field}:", grad)
                 grad_dict[field] = grad
             # Ensure that the gradients are detached from the computation graph
-            
+            #print("Gradients for pos and cell:", grad_dict)
             #print("------------------------------\n",
             #       "Diffusion loss gradient:", grad_dict, "\n",
             #       "Diffusion loss function:", self.diffusion_loss_fn(x_for_grad,None), "\n",
@@ -206,7 +212,7 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
             #      "scores:", scores, "\n",)
             for k in grad_dict:
                 if k in scores:
-                    scores[k] = scores[k] - self.diffusion_loss_weight * grad_dict[k]
+                    scores[k] = scores[k] + self.diffusion_loss_weight * grad_dict[k]
         # --- END NEW ---
 
         return model_out.replace(**scores)
@@ -236,3 +242,7 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
         """Set or update the diffusion loss function and its weight after the module has been initialized."""
         self.diffusion_loss_fn = diffusion_loss_fn
         self.diffusion_loss_weight = diffusion_loss_weight
+
+    def save_diffusion_loss_history(self, filename: str):
+        with open(filename, "w") as f:
+            json.dump(self.diffusion_loss_history, f)
