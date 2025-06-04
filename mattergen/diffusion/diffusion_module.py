@@ -212,7 +212,7 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
             #      "scores:", scores, "\n",)
             for k in grad_dict:
                 if k in scores:
-                    scores[k] = scores[k] + self.diffusion_loss_weight * grad_dict[k]
+                    scores[k] = scores[k] - self.diffusion_loss_weight * grad_dict[k]
         # --- END NEW ---
 
         return model_out.replace(**scores)
