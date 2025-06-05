@@ -162,7 +162,7 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
         )
 
         # --- NEW: Diffusion loss gradient modification ---
-        if self.diffusion_loss_fn is not None:
+        if self.diffusion_loss_fn is not None and (t<self.corruption.T*0.9).all():
                         # Set requires_grad=True for all relevant fields at once
             replace_kwargs = ["pos", "cell"]
 

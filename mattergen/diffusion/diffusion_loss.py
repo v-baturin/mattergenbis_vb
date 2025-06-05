@@ -29,7 +29,15 @@ def volume(x, t, target):
     # Ensure target is broadcastable
     target_tensor = torch.as_tensor(target, dtype=vol.dtype, device=vol.device)
     loss = torch.abs(vol - target_tensor)
-    return 10**-6*loss
+    return 10**-5*loss
+
+def new_loss(x, t, target):
+    """
+    Example of a new loss function.
+    This is just a placeholder and should be replaced with an actual implementation.
+    """
+    # Assuming x and target are tensors of the same shape
+    pass
 
 def make_combined_loss(guidance_dict: dict) -> callable:
     """
@@ -54,5 +62,6 @@ LOSS_REGISTRY: Dict[str, Callable[..., torch.Tensor]] = {
     "l2_distance": l2_distance_loss,
     "l1_distance": l1_distance_loss,
     "volume": volume,
+    "new_loss": new_loss,  # Placeholder for a new loss function
     # Add more loss functions as needed
 }
