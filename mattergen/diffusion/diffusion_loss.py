@@ -29,7 +29,7 @@ def volume(x, t, target):
     # Ensure target is broadcastable
     target_tensor = torch.as_tensor(target, dtype=vol.dtype, device=vol.device)
     loss = torch.abs(vol - target_tensor)
-    return 10**-5*loss
+    return 10**-4*loss
 
 def new_loss(x, t, target):
     """
