@@ -74,15 +74,7 @@ def draw_samples_from_sampler(
         sampler.diffusion_module.save_diffusion_loss_history(
             output_path / "diffusion_loss_history.txt"
         )
-        plt.figure(figsize=(8, 4))
-        plt.plot(sampler.diffusion_module.diffusion_loss_history, label="Diffusion Loss")
-        plt.xlabel("Step")
-        plt.ylabel("Diffusion Loss")
-        plt.title("Diffusion Loss History")
-        plt.legend()
-        plt.tight_layout()
-        plt.show()
-
+        
     generated_strucs = structure_from_model_output(
         all_samples["pos"].reshape(-1, 3),
         all_samples["atomic_numbers"].reshape(-1),
