@@ -155,6 +155,8 @@ def radius_graph_pbc(
 
     if pbc_[0]:
         inv_min_dist_a1 = torch.norm(cross_a2a3 / cell_vol, p=2, dim=-1)
+        # Replace any NaN values in inv_min_dist_a2 with 0
+        inv_min_dist_a1 = torch.where(torch.isnan(inv_min_dist_a1), torch.zeros_like(inv_min_dist_a1), inv_min_dist_a1)
         rep_a1 = torch.ceil(radius * inv_min_dist_a1)
     else:
         rep_a1 = cell.new_zeros(1)
@@ -162,6 +164,8 @@ def radius_graph_pbc(
     if pbc_[1]:
         cross_a3a1 = torch.cross(cell[:, 2], cell[:, 0], dim=-1)
         inv_min_dist_a2 = torch.norm(cross_a3a1 / cell_vol, p=2, dim=-1)
+        # Replace any NaN values in inv_min_dist_a2 with 0
+        inv_min_dist_a2 = torch.where(torch.isnan(inv_min_dist_a2), torch.zeros_like(inv_min_dist_a2), inv_min_dist_a2)
         rep_a2 = torch.ceil(radius * inv_min_dist_a2)
     else:
         rep_a2 = cell.new_zeros(1)
@@ -169,6 +173,8 @@ def radius_graph_pbc(
     if pbc_[2]:
         cross_a1a2 = torch.cross(cell[:, 0], cell[:, 1], dim=-1)
         inv_min_dist_a3 = torch.norm(cross_a1a2 / cell_vol, p=2, dim=-1)
+        # Replace any NaN values in inv_min_dist_a2 with 0
+        inv_min_dist_a3 = torch.where(torch.isnan(inv_min_dist_a3), torch.zeros_like(inv_min_dist_a3), inv_min_dist_a3)
         rep_a3 = torch.ceil(radius * inv_min_dist_a3)
     else:
         rep_a3 = cell.new_zeros(1)
