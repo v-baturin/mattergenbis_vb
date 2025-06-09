@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from zipfile import ZipFile
 from typing import Callable
-import matplotlib.pyplot as plt
 
 import ase.io
 import hydra
