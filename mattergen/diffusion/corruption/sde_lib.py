@@ -69,6 +69,18 @@ class SDE(Corruption):
         """Returns mean and standard deviation of the marginal distribution of the SDE, $p_t(x)$."""
         pass  # mean: (nodes_per_sample * batch_size, num_features), std: (nodes_per_sample * batch_size, 1)
 
+    @abc.abstractmethod
+    def marginal_prob_from_s(
+        self,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        s: torch.Tensor,
+        batch_idx: B = None,
+        batch: Optional[BatchedData] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Returns mean and standard deviation of the marginal distribution of the SDE, $p_t(x|x_s)$."""
+        pass
+
     def mean_coeff_and_std(
         self,
         x: torch.Tensor,
@@ -93,6 +105,29 @@ class SDE(Corruption):
           sampled x(t)
         """
         mean, std = self.marginal_prob(x=x, t=t, batch_idx=batch_idx, batch=batch)
+        z = torch.randn_like(x)
+
+        return mean + std * z
+
+    def sample_from_s(
+        self, 
+        x: torch.Tensor,
+        t: torch.Tensor, 
+        s: torch.Tensor,
+        batch_idx: B = None,
+        batch: Optional[BatchedData] = None,
+    ) -> torch.Tensor:
+        """Sample marginal for x(t) given x(s) with s<t.
+        Args:
+          x: samples at time s
+          t: time t
+          s: time s, must be less than t
+        Returns:
+          sampled x(t)
+        """
+        mean, std = self.marginal_prob_from_s(
+            x=x, t=t, s=s, batch_idx=batch_idx, batch=batch
+        )
         z = torch.randn_like(x)
 
         return mean + std * z

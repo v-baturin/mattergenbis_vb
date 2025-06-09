@@ -33,6 +33,7 @@ def main(
     guidance: dict | None = None,
     diffusion_loss_weight: float = 1.0,
     print_loss: bool = False,
+    self_rec_steps: int = 1,
 ):
     """
     Evaluate diffusion model against molecular metrics.
@@ -116,6 +117,7 @@ def main(
         diffusion_loss_fn=loss_fn,           # NEW
         diffusion_loss_weight=diffusion_loss_weight,   # NEW
         print_loss=print_loss,  # NEW
+        self_rec_steps=self_rec_steps, # NEW
     )
     generator.generate(output_dir=Path(output_path))
 
@@ -124,7 +126,7 @@ def _main():
     # use fire instead of argparse to allow for the specification of dictionary values via the CLI
     #fire.Fire(main)
     #this line is for debugging purposes, to run the script directly
-    fire.Fire(main, command='"results/chemical_system/Pd-Ni-H_guided"   --pretrained-name=chemical_system   --batch_size=50   --properties_to_condition_on="{\'chemical_system\':\'Pd-Ni-H\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0   --guidance="{\'volume\': 30.935}"   --diffusion_loss_weight=1.0   --print_loss=True')
+    fire.Fire(main, command='"results/chemical_system/Pd-Ni-H_guided"   --pretrained-name=chemical_system   --batch_size=50   --properties_to_condition_on="{\'chemical_system\':\'Pd-Ni-H\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0   --guidance="{\'volume\': 30.935}"   --diffusion_loss_weight=1.0   --print_loss=True   --self_rec_steps=3')
 
 
 if __name__ == "__main__":

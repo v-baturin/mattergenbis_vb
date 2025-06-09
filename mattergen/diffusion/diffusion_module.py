@@ -47,9 +47,7 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
         corruption: MultiCorruption[T],
         loss_fn: Loss,
         pre_corruption_fn: BatchTransform | None = None,
-        timestep_sampler: TimestepSampler | None = None,
-        diffusion_loss_fn: Callable[[T, torch.Tensor], torch.Tensor] | None = None,
-        diffusion_loss_weight: float = 1.0,
+        timestep_sampler: TimestepSampler | None = None,    
     ) -> None:
         super().__init__()
         self.model = model
@@ -62,11 +60,7 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
             min_t=1e-5,
             max_t=corruption.T,
         )
-        self.diffusion_loss_fn = diffusion_loss_fn  
-        self.diffusion_loss_weight = diffusion_loss_weight 
-        self.diffusion_loss_history = [] # To keep track of diffusion loss values
-        self.print_loss_history = False  # Flag to control printing of loss history
-
+                
         # Check corruption for nn.Modules and register them here.
         self._register_corruption_modules()
 
@@ -139,6 +133,41 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
 
         return noisy_batch, t
 
+    def _predict_x0(self, x: T, t: torch.Tensor) -> T:
+        """Predict the x_0 from a batch of data at a given timestep
+
+        Args:
+            x: batch of data
+            t: timestep
+
+        Returns:
+            x_0: predicted x_0 for the batch of data at the given timestep
+        """
+        replace_kwargs = ["pos", "cell"]
+
+        # Estimate x_0_hat for pos and cell using the Ancestral Sampling Formula
+        x0_hat = {}
+        for field in replace_kwargs:
+            # Get SDE for the relevant field 
+            sde = getattr(self.corruption.sdes, field)
+            # Get alpha_t and sigma_t for the current t
+            alpha_t, sigma_t = sde.mean_coeff_and_std(
+            x=getattr(x, field),
+            t=t,
+            batch_idx=self.corruption._get_batch_indices(x)[field],
+            batch=x
+            )
+            x0_hat[field] = (getattr(x, field) + sigma_t**2 * self.score_fn(x, t)[field]) / alpha_t
+
+        # Create a new ChemGraphBatch estimating x0 with requires_grad=True for pos and cell    
+        x0 = ChemGraphBatch(
+            atomic_numbers=x.atomic_numbers,
+            pos=x0_hat["pos"].clone().detach().requires_grad_(True),
+            cell=x0_hat["cell"].clone().detach().requires_grad_(True),
+            batch=x.batch,
+        )
+        return x0
+        
     def score_fn(self, x: T, t: torch.Tensor) -> T:
         """Calculate the score of a batch of data at a given timestep
 
@@ -162,59 +191,8 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
         )
 
         # --- NEW: Diffusion loss gradient modification ---
-        if self.diffusion_loss_fn is not None and (t<self.corruption.T*0.9).all():
-                        # Set requires_grad=True for all relevant fields at once
-            replace_kwargs = ["pos", "cell"]
-
-            # Estimate x_0_hat for pos and cell using the Ancestral Sampling Formula
-            x0_hat = {}
-            for field in replace_kwargs:
-                # Get SDE for the relevant field 
-                sde = getattr(self.corruption.sdes,field)  
-                # Get alpha_t and sigma_t for the current t
-                alpha_t, sigma_t = sde.mean_coeff_and_std(x=getattr(x, field), t=t, batch_idx=self.corruption._get_batch_indices(x)[field], batch=x)
-                x0_hat[field] = (getattr(x, field) + sigma_t**2 * scores[field]) / alpha_t
-
-            # Create a new ChemGraphBatch estimating x0 with requires_grad=True for pos and cell    
-            x_for_grad = ChemGraphBatch(
-                atomic_numbers=x.atomic_numbers,
-                pos=x0_hat["pos"].clone().detach().requires_grad_(True),
-                cell=x0_hat["cell"].clone().detach().requires_grad_(True),
-                batch=x.batch,
-            )
-
-            #print("cell:",x_for_grad.cell.requires_grad, "\n","pos:",x_for_grad.pos.requires_grad)
-
-            grad_dict = {}
-            with torch.autograd.set_grad_enabled(True):
-                diffusion_loss = self.diffusion_loss_fn(x_for_grad, t)
-            
-            if self.print_loss_history:
-                self.diffusion_loss_history.append(diffusion_loss.cpu().tolist())
-                
-            for field in replace_kwargs:
-                grad = torch.autograd.grad(
-                    diffusion_loss, getattr(x_for_grad, field),
-                    grad_outputs=torch.ones_like(diffusion_loss),
-                    create_graph=True,
-                    allow_unused=True
-                )[0]
-                if grad is None:
-                    grad = torch.zeros_like(getattr(x_for_grad, field))
-                #print(f"Gradient for {field}:", grad)
-                grad_dict[field] = grad
-            # Ensure that the gradients are detached from the computation graph
-            #print("Gradients for pos and cell:", grad_dict)
-            #print("------------------------------\n",
-            #       "Diffusion loss gradient:", grad_dict, "\n",
-            #       "Diffusion loss function:", self.diffusion_loss_fn(x_for_grad,None), "\n",
-            #      self.diffusion_loss_fn,"\n------------------------------", "\n",
-            #      "scores:", scores, "\n",)
-            for k in grad_dict:
-                if k in scores:
-                    #print(f"Before update - scores[{k}]:", scores[k])
-                    #print(f"Grad for {k}:", grad_dict[k])
-                    scores[k] = scores[k] - self.diffusion_loss_weight * grad_dict[k]
+        #if self.diffusion_loss_fn is not None and (t<self.corruption.T*0.9).all():
+                        
         # --- END NEW ---
 
         return model_out.replace(**scores)

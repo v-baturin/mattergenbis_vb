@@ -116,3 +116,35 @@ class Corruption(abc.ABC):
           sampled x(t) (same shape as input x).
         """
         pass
+
+    @abc.abstractmethod
+    def sample_from_s(
+        self,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        s: torch.Tensor,
+        batch_idx: B = None,
+        batch: Optional[BatchedData] = None,
+    ) -> torch.Tensor:
+        """Sample marginal for x(t) given x(s) with s<t.
+        Args:
+          x: shape (batch_size, ...)
+          t: shape (batch_size,)
+          s: shape (batch_size,)
+          batch_idx: shape (num_thingies,) with integer entries in the range [0, batch_size), indicating which sample each thingy belongs to
+        Returns:
+          sampled x(t) (same shape as input x).
+        """
+        pass
+
+    @abc.abstractmethod
+    def marginal_prob_from_s(
+        self,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        s: torch.Tensor,
+        batch_idx: B = None,
+        batch: Optional[BatchedData] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Parameters to determine the marginal distribution of the SDE, $p_t(x|x_s)$."""
+        pass
