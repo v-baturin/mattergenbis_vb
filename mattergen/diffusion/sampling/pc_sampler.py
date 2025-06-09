@@ -193,19 +193,7 @@ class PredictorCorrector(Generic[Diffusable]):
                 score[k] = score[k] - self.diffusion_loss_weight * grad_dict[k]
         pass
 
-    def _forward_noise(
-        self, batch: Diffusable, mean_batch: Diffusable, t: torch.Tensor, s: torch.Tensor
-    ) -> Tuple[Diffusable, Diffusable]:
-        """Add noise to the batch according to the forward diffusion process."""
-        # Add noise according to the diffusion process
-        for k in self._multi_corruption.corrupted_fields:
-            if k in batch:
-                # Add noise to the batch
-                batch[k] = self._multi_corruption.corruptions[k].sample_from_s(batch[k], t, s)
-                # Update the mean batch
-                mean_batch[k] = self._multi_corruption.corruptions[k].marginal_prob_from_s(batch[k], t, s)[0]
-        return batch, mean_batch
-
+    
     @torch.no_grad()
     def _denoise(
         self,
@@ -275,8 +263,23 @@ class PredictorCorrector(Generic[Diffusable]):
                     samples_means=samples_means, batch=batch, mean_batch=mean_batch, mask=mask
                 ) #z_t-1
                 
-                # Renoise the batch
-                batch, mean_batch = self._forward_noise(batch_, mean_batch_, t, t + dt) #z_t
+                # Renoise the batch fieldwise
+                fns = {
+                    k: lambda batch_k, mean_batch_k, t=t, s=t + dt, batch_idx=self._multi_corruption._get_batch_indices(batch_): 
+                        (
+                            self._multi_corruption.corruptions[k].sample_from_s(batch_k, t, s, batch_idx=batch_idx),
+                            self._multi_corruption.corruptions[k].marginal_prob_from_s(batch_k, t, s, batch_idx=batch_idx)[0]
+                        )
+                    for k in self._multi_corruption.corrupted_fields
+                    if k in batch_
+                }
+                samples_means = apply(
+                    fns=fns,
+                    batch=batch_,
+                    mean_batch=mean_batch_,
+                )
+                batch = batch_.replace(**{k: v[0] for k, v in samples_means.items()})
+                mean_batch = mean_batch_.replace(**{k: v[1] for k, v in samples_means.items()})
 
             batch = batch_.clone()
             mean_batch = mean_batch_.clone()

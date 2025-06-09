@@ -203,7 +203,7 @@ class DiscreteDiffusionMatrixBase(DiscreteDiffusionBase):
     def get_qt_matrix_from_s(self, s, t):
         """Returns the matrix Q = q(x_t | x_s) materialized over all x_s."""
         val = torch.eye(self.dim, device=s.device if isinstance(s, torch.Tensor) else 'cpu')
-        for i in range(int(s), int(t)):
+        for i in range(int(s[0]), int(t[0])):
             val = torch.matmul(self.get(torch.tensor(i, device=val.device)), val)
         return val
 
