@@ -165,6 +165,23 @@ class BaseVPSDE(SDE):
         std = maybe_expand(torch.sqrt(1.0 - mean_coeff**2), batch_idx, x)
         return mean, std
 
+    def marginal_prob_from_s(
+        self,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        s: torch.Tensor,
+        batch_idx: B = None,
+        batch: Optional[BatchedData] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Returns mean and standard deviation of the marginal distribution of the SDE, $p_t(x|x_s)$."""
+        # This is the same as marginal_prob, but with a different time t.
+        # We assume that s < t.
+        assert torch.all(s < t), "s must be less than t"
+        mean_coeff = self._marginal_mean_coeff(t) / self._marginal_mean_coeff(s)
+        mean = maybe_expand(mean_coeff, batch_idx, x) * x
+        std = maybe_expand(torch.sqrt(1.0 - mean_coeff**2), batch_idx, x)
+        return mean, std
+
     def prior_sampling(
         self,
         shape: Union[torch.Size, Tuple],
@@ -268,6 +285,22 @@ class VESDE(SDE):
         batch: Optional[BatchedData] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         std = maybe_expand(self.sigma_min * (self.sigma_max / self.sigma_min) ** t, batch_idx, x)
+        mean = x
+        return mean, std
+    
+    def marginal_prob_from_s(
+        self,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        s: torch.Tensor,
+        batch_idx: B = None,
+        batch: Optional[BatchedData] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Returns mean and standard deviation of the marginal distribution of the SDE, $p_t(x|x_s)$."""
+        # This is the same as marginal_prob, but with a different time t.
+        # We assume that s < t.
+        assert torch.all(s < t), "s must be less than t"
+        std = maybe_expand(self.sigma_min * (self.sigma_max / self.sigma_min) ** s *( (self.sigma_max / self.sigma_min) ** (t-s) - 1), batch_idx, x)
         mean = x
         return mean, std
 
