@@ -53,7 +53,7 @@ def draw_samples_from_sampler(
 
     all_samples_list = []
     all_trajs_list = []
-    sampler.diffusion_module.print_loss_history = print_loss  # NEW
+    sampler.print_loss_history = print_loss  # NEW
     sampler.self_rec_steps = self_rec_steps  # NEW
 
     for conditioning_data, mask in tqdm(condition_loader, desc="Generating samples"):

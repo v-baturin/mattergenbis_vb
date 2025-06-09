@@ -61,6 +61,23 @@ class D3PMCorruption(Corruption):
         )
         return logits, None  # mean: (nodes_per_sample * batch_size, ), std None
 
+    def marginal_prob_from_s(
+        self,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        s: torch.Tensor,
+        batch_idx: B = None,
+        batch: Optional[BatchedData] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Parameters to determine the marginal distribution of the corruption process, $p_t(x | x_s)$."""
+        # plus 1 because t=0 is actually no corruption for D3PM and it has N corruption steps, i.e., values go from 0 to N.
+        t_discrete = maybe_expand(to_discrete_time(t, N=self.N, T=self.T), batch_idx) + 1
+        s_discrete = maybe_expand(to_discrete_time(s, N=self.N, T=self.T), batch_idx) + 1
+        _, logits = d3pm.q_sample_from_s(
+            self._to_zero_based(x.long()), t_discrete, s_discrete, diffusion=self.d3pm, return_logits=True
+        )
+        return logits, None
+
     def prior_sampling(
         self,
         shape: Union[torch.Size, Tuple],
@@ -106,3 +123,16 @@ class D3PMCorruption(Corruption):
         sample = torch.distributions.Categorical(logits=logits).sample()
         # samples are zero-based, so we need to add the offset to convert to non-zero-based class labels.
         return self._to_non_zero_based(sample)
+
+    def sample_from_s(
+        self,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        batch_idx: B = None,
+        batch: Optional[BatchedData] = None,
+    ) -> torch.Tensor:
+        """Sample from the corruption process, $p_t(x | x_0)$."""
+        # sample and then add offset to convert to non-zero-based class labels
+        return self._to_non_zero_based(
+            self.d3pm.sample_from_s(self._to_zero_based(x.long()), t, batch_idx=batch_idx)
+        )

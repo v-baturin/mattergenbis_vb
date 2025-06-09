@@ -199,6 +199,13 @@ class DiscreteDiffusionMatrixBase(DiscreteDiffusionBase):
         for i in range(0, t):
             val = product_fn(i, val)
         return val
+    
+    def get_qt_matrix_from_s(self, s, t):
+        """Returns the matrix Q = q(x_t | x_s) materialized over all x_s."""
+        val = torch.eye(self.dim, device=s.device if isinstance(s, torch.Tensor) else 'cpu')
+        for i in range(int(s), int(t)):
+            val = torch.matmul(self.get(torch.tensor(i, device=val.device)), val)
+        return val
 
     def get_qt_given_q0(self, q0, t, return_logits=False, make_one_hot=False, epsilon=1e-20):
         """Get q(x_t), the n-step posterior.
@@ -698,6 +705,37 @@ def q_sample(x_start, t, diffusion, return_logits=False):
 
     logits = diffusion.get_qt_given_q0(q0=x_start, t=t, return_logits=True)
     sample = Categorical(logits=logits).sample()
+    if return_logits:
+        return sample, logits
+    return sample
+
+def q_sample_from_s(x, t, s, diffusion, return_logits=False, batch_idx=None):
+    """Sample marginal for x(t) given x(s) with s < t.
+
+    Args:
+      x: shape (batch_size, ...)
+      t: shape (batch_size,)
+      s: shape (batch_size,)
+      diffusion: a DiscreteDiffusionBase instance
+      return_logits: if True, also return logits
+      batch_idx: (optional) not used here, but for API consistency
+
+    Returns:
+      sampled x(t) (same shape as input x), [optionally logits]
+    """
+    assert x.dtype in [torch.int32, torch.long]
+    dim = diffusion.dim
+
+    # One-hot encode x(s)
+    x_s_onehot = torch.eye(dim, device=x.device)[x]
+
+    # Compute q(x_t | x_s) using the product of transition matrices from s to t-1
+    Q = diffusion.get_qt_matrix_from_s(s, t)  # shape [dim, dim]
+    probs = torch.einsum("ij,bj->bi", Q, x_s_onehot)
+
+    logits = torch.log(probs + 1e-20)
+    sample = torch.distributions.Categorical(logits=logits).sample()
+
     if return_logits:
         return sample, logits
     return sample
