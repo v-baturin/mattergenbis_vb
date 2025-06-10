@@ -128,7 +128,7 @@ class SDE(Corruption):
         mean, std = self.marginal_prob_from_s(
             x=x, t=t, s=s, batch_idx=batch_idx, batch=batch
         )
-        z = torch.randn_like(x)
+        z = torch.randn_like(x, dtype=torch.float32)
 
         return mean + std * z
 

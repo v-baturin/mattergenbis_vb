@@ -275,8 +275,10 @@ class PredictorCorrector(Generic[Diffusable]):
                 }
                 samples_means = apply(
                     fns=fns,
-                    batch=batch_,
-                    mean_batch=mean_batch_,
+                    batch_k=batch_,
+                    mean_batch_k=mean_batch_,
+                    broadcast={"t": t, "s": t + dt},
+                    batch_idx=self._multi_corruption._get_batch_indices(batch),
                 )
                 batch = batch_.replace(**{k: v[0] for k, v in samples_means.items()})
                 mean_batch = mean_batch_.replace(**{k: v[1] for k, v in samples_means.items()})
