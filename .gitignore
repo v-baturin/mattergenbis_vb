@@ -7,6 +7,10 @@ results/
 mattergen.egg-info/
 log.txt
 
+#Material files
+*.vasp
+*.cif
+
 # User-specific files
 *.rsuser
 *.suo
