@@ -7,6 +7,7 @@ from typing import Generic, Mapping, Tuple, TypeVar, Callable
 
 import torch
 from tqdm.auto import tqdm
+import json
 
 from mattergen.diffusion.corruption.multi_corruption import MultiCorruption, apply
 from mattergen.diffusion.data.batched_data import BatchedData
@@ -165,6 +166,19 @@ class PredictorCorrector(Generic[Diffusable]):
         batch = _sample_prior(self._multi_corruption, conditioning_data, mask=mask)
         return self._denoise(batch=batch, mask=mask, record=record)
 
+    def save_diffusion_loss_history(self, filename: str):
+        with open(filename, "w") as f:
+            json.dump(self.diffusion_loss_history, f)
+
+    def set_diffusion_loss(
+        self,
+        diffusion_loss_fn: Callable[[BatchedData, torch.Tensor], torch.Tensor],
+        diffusion_loss_weight: float = 1.0,
+    ):
+        """Set or update the diffusion loss function and its weight after the module has been initialized."""
+        self.diffusion_loss_fn = diffusion_loss_fn
+        self.diffusion_loss_weight = diffusion_loss_weight
+
     def _forward_guidance(self, batch: Diffusable, t: torch.Tensor, score) -> Diffusable:
         """Update the score with the forward universal guidance function."""
         # Compute x0|xt
@@ -278,9 +292,8 @@ class PredictorCorrector(Generic[Diffusable]):
                 samples_means = apply(
                     fns=fns,
                     batch_k=batch_,
-                    mean_batch_k=mean_batch_,
                     broadcast={"t": t, "s": t + dt},
-                    k = batch_.get_batch_field_names(),
+                    k = {u:u for u in self._multi_corruption.corrupted_fields if u in batch_ },
                     batch_idx=self._multi_corruption._get_batch_indices(batch_),
                 )
                 batch = batch_.replace(**{k: v[0] for k, v in samples_means.items()})

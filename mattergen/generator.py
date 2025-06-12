@@ -72,7 +72,7 @@ def draw_samples_from_sampler(
 
     # Save and print the diffusion loss history
     if print_loss:
-        sampler.diffusion_module.save_diffusion_loss_history(
+        sampler.save_diffusion_loss_history(
             output_path / "diffusion_loss_history.txt"
         )
         
@@ -391,7 +391,7 @@ class CrystalGenerator:
 
         #---NEW
         if diffusion_loss_fn is not None:
-            sampler.diffusion_module.set_diffusion_loss(diffusion_loss_fn, diffusion_loss_weight)
+            sampler.set_diffusion_loss(diffusion_loss_fn, diffusion_loss_weight)
         #---END NEW
 
         generated_structures = draw_samples_from_sampler(
