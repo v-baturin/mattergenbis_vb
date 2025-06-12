@@ -192,7 +192,13 @@ class PredictorCorrector(Generic[Diffusable]):
             if k in score:
                 score[k] = score[k] - self.diffusion_loss_weight * grad_dict[k]
         pass
-
+    
+    def forward_corruption(self, batch_k: Diffusable, t: torch.Tensor, s: torch.Tensor, k: str, batch_idx: torch.Tensor | None = None) -> Tuple[Diffusable, torch.Tensor]:
+        """Forward pass for a corruption from s to t."""
+        return (
+        self._multi_corruption.corruptions[k].sample_from_s(batch_k, t, s, batch_idx=batch_idx),
+        self._multi_corruption.corruptions[k].marginal_prob_from_s(batch_k, t, s, batch_idx=batch_idx)[0]
+                        )
     
     @torch.no_grad()
     def _denoise(
@@ -265,11 +271,7 @@ class PredictorCorrector(Generic[Diffusable]):
                 
                 # Renoise the batch fieldwise
                 fns = {
-                    k: lambda batch_k, mean_batch_k, t=t, s=t + dt, batch_idx=self._multi_corruption._get_batch_indices(batch_): 
-                        (
-                            self._multi_corruption.corruptions[k].sample_from_s(batch_k, t, s, batch_idx=batch_idx),
-                            self._multi_corruption.corruptions[k].marginal_prob_from_s(batch_k, t, s, batch_idx=batch_idx)[0]
-                        )
+                    k: self.forward_corruption
                     for k in self._multi_corruption.corrupted_fields
                     if k in batch_
                 }
@@ -278,7 +280,8 @@ class PredictorCorrector(Generic[Diffusable]):
                     batch_k=batch_,
                     mean_batch_k=mean_batch_,
                     broadcast={"t": t, "s": t + dt},
-                    batch_idx=self._multi_corruption._get_batch_indices(batch),
+                    k = batch_.get_batch_field_names(),
+                    batch_idx=self._multi_corruption._get_batch_indices(batch_),
                 )
                 batch = batch_.replace(**{k: v[0] for k, v in samples_means.items()})
                 mean_batch = mean_batch_.replace(**{k: v[1] for k, v in samples_means.items()})
