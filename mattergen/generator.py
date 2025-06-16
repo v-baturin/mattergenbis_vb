@@ -43,6 +43,7 @@ def draw_samples_from_sampler(
     record_trajectories: bool = True,
     print_loss: bool = False,  # NEW
     self_rec_steps: int = 1,  # NEW
+    back_step: int = 0,  # NEW
 ) -> list[Structure]:
 
     # Dict
@@ -55,6 +56,7 @@ def draw_samples_from_sampler(
     all_trajs_list = []
     sampler.print_loss_history = print_loss  # NEW
     sampler.self_rec_steps = self_rec_steps  # NEW
+    sampler.back_step = back_step  # NEW
 
     for conditioning_data, mask in tqdm(condition_loader, desc="Generating samples"):
 
@@ -199,6 +201,7 @@ class CrystalGenerator:
     diffusion_loss_weight: float = 1.0         # NEW
     print_loss: bool = False # NEW
     self_rec_steps: int = 1  # NEW
+    back_step: int = 0, # NEW
    
 
     # Additional overrides, only has an effect when using a diffusion-codebase model
@@ -404,6 +407,7 @@ class CrystalGenerator:
             record_trajectories=self.record_trajectories,
             print_loss=self.print_loss,  # NEW
             self_rec_steps=self.self_rec_steps,  # NEW
+            back_step=self.back_step,  # NEW
         )
 
         return generated_structures

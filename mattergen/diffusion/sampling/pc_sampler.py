@@ -40,6 +40,7 @@ class PredictorCorrector(Generic[Diffusable]):
         diffusion_loss_fn: Callable[[Diffusable, torch.Tensor], torch.Tensor] | None = None,
         diffusion_loss_weight: float = 1.0,  # Weight for the diffusion loss (theoretically should be 1.0)
         self_rec_steps: int = 1,
+        back_step: int = 0,  # Number of steps to go back in the predictor-corrector loop
         print_loss_history: bool = False,  # Flag to control printing of loss history
     ):
         """
@@ -91,6 +92,7 @@ class PredictorCorrector(Generic[Diffusable]):
         self.diffusion_loss_history = [] # To keep track of diffusion loss values
         self.print_loss_history = print_loss_history  # Flag to control printing of loss history
         self.self_rec_steps = self_rec_steps
+        self.back_step = back_step  # Number of steps to go back in the predictor-corrector loop
 
     @property
     def diffusion_module(self) -> DiffusionModule:
@@ -179,13 +181,38 @@ class PredictorCorrector(Generic[Diffusable]):
         self.diffusion_loss_fn = diffusion_loss_fn
         self.diffusion_loss_weight = diffusion_loss_weight
 
+        def _backward_guidance(self, x0: Diffusable, t: torch.Tensor, score) -> Diffusable:
+            """Update the score with the backward universal guidance function."""
+            grad_dict = {}
+            replace_kwargs = ["pos", "cell"]
+            with torch.set_grad_enabled(True):
+                diffusion_loss = self.diffusion_loss_fn(x0, t)
+            if self.print_loss_history:
+                self.diffusion_loss_history.append(diffusion_loss.cpu().tolist())
+            for field in replace_kwargs:
+                grad = torch.autograd.grad(
+                    diffusion_loss, getattr(x0, field),
+                    grad_outputs=torch.ones_like(diffusion_loss),
+                    create_graph=True,
+                    allow_unused=True
+                )[0]
+                if grad is None:
+                    grad = torch.zeros_like(getattr(x0, field))
+                grad_dict[field] = grad
+            for k in grad_dict:
+                if k in score:
+                    score[k] = score[k] - self.diffusion_loss_weight * grad_dict[k]
+            pass
+
     def _forward_guidance(self, batch: Diffusable, t: torch.Tensor, score) -> Diffusable:
         """Update the score with the forward universal guidance function."""
         # Compute x0|xt
-        x0 = self.diffusion_module._predict_x0(
-            x=batch,
-            t=t,
-        )
+        batch_ = batch.clone().detach().requires_grad(True)
+        with torch.set_grad_enabled(True):
+            x0 = self.diffusion_module._predict_x0(
+                x=batch_,
+                t=t,
+            )
         grad_dict = {}
         replace_kwargs = ["pos", "cell"]
         with torch.set_grad_enabled(True):
@@ -194,7 +221,7 @@ class PredictorCorrector(Generic[Diffusable]):
             self.diffusion_loss_history.append(diffusion_loss.cpu().tolist())
         for field in replace_kwargs:
             grad = torch.autograd.grad(
-                diffusion_loss, getattr(x0, field),
+                diffusion_loss, getattr(batch_, field),
                 grad_outputs=torch.ones_like(diffusion_loss),
                 create_graph=True,
                 allow_unused=True
@@ -265,6 +292,15 @@ class PredictorCorrector(Generic[Diffusable]):
 
                 if self.diffusion_loss_fn is not None and (t < self._multi_corruption.T * 0.9).all():
                     self._forward_guidance(batch, t, score)
+
+                for _ in range(self.back_step):
+                    # Update the score with the backward universal guidance function
+                    x0 = self._diffusion_module._predict_x0(
+                        x=batch,
+                        t=t,
+                        score=score,
+                    )
+                    self._backward_guidance(x0, t, score)
 
                 # Predictor updates to predict z_t-1
                 predictor_fns = {

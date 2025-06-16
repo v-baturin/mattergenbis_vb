@@ -133,17 +133,22 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
 
         return noisy_batch, t
 
-    def _predict_x0(self, x: T, t: torch.Tensor) -> T:
+    def _predict_x0(self, x: T, t: torch.Tensor, score: T | None = None ) -> T:
         """Predict the x_0 from a batch of data at a given timestep
 
         Args:
             x: batch of data
             t: timestep
+            score: score of the batch of data at the given timestep, if None, it will be calculated (it is modified in the self-rec steps)
 
         Returns:
             x_0: predicted x_0 for the batch of data at the given timestep
         """
         replace_kwargs = ["pos", "cell"]
+
+        if score is None:
+            # If score is not provided, calculate it using the score function
+            score = self.score_fn(x, t)
 
         # Estimate x_0_hat for pos and cell using the Ancestral Sampling Formula
         x0_hat = {}
@@ -157,7 +162,7 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
             batch_idx=self.corruption._get_batch_indices(x)[field],
             batch=x
             )
-            x0_hat[field] = (getattr(x, field) + sigma_t**2 * self.score_fn(x, t)[field]) / alpha_t
+            x0_hat[field] = (getattr(x, field) + sigma_t**2 * score[field]) / alpha_t
 
         # Create a new ChemGraphBatch estimating x0 with requires_grad=True for pos and cell    
         x0 = ChemGraphBatch(
