@@ -201,7 +201,9 @@ class PredictorCorrector(Generic[Diffusable]):
                 grad_dict[field] = grad
             for k in grad_dict:
                 if k in score:
-                    score[k] = score[k] - self.diffusion_loss_weight * grad_dict[k]
+                    alpha_t = x0.alpha[k]
+                    if (alpha_t<1).all():
+                        score[k] = score[k] + alpha_t**0.5 / (1-alpha_t) * grad_dict[k]
             pass
 
     def _forward_guidance(self, batch: Diffusable, t: torch.Tensor, score) -> Diffusable:
@@ -285,36 +287,37 @@ class PredictorCorrector(Generic[Diffusable]):
                     batch, mean_batch = _mask_replace(
                         samples_means=samples_means, batch=batch, mean_batch=mean_batch, mask=mask
                     )
-            
-            for j in range(self.self_rec_steps):
-                # Compute unconditionnal score
-                score = self._score_fn(batch, t)
 
-                if self.diffusion_loss_fn is not None and (t < self._multi_corruption.T * 0.9).all():
+            score = self._score_fn(batch, t)
+
+            if self.diffusion_loss_fn is not None and (t < self._multi_corruption.T * 0.9).all():
                     self._forward_guidance(batch, t, score)
-
-                for _ in range(self.back_step):
-                    # Update the score with the backward universal guidance function
-                    x0 = self._diffusion_module._predict_x0(
-                        x=batch,
-                        t=t,
-                        score=score,
-                    )
-                    self._backward_guidance(x0, t, score)
+                    for _ in range(self.back_step):
+                        # Update the score with the backward universal guidance function
+                        x0 = self._diffusion_module._predict_x0(
+                            x=batch,
+                            t=t,
+                            score=score,
+                            get_alpha=True
+                        )
+                        self._backward_guidance(x0, t, score)
 
                 # Predictor updates to predict z_t-1
-                predictor_fns = {
+            predictor_fns = {
                     k: predictor.update_given_score for k, predictor in self._predictors.items()
                 }
-                samples_means = apply(
+            samples_means = apply(
                     fns=predictor_fns,
                     x=batch,
                     score=score,
                     broadcast=dict(t=t, batch=batch, dt=dt),
                     batch_idx=self._multi_corruption._get_batch_indices(batch),
                 )
-                if record:
+            if record:
                     recorded_samples.append(batch.clone().to("cpu"))
+            
+            for _ in range(self.self_rec_steps-1):
+                # Compute unconditionnal score
                 batch_, mean_batch_ = _mask_replace(
                     samples_means=samples_means, batch=batch, mean_batch=mean_batch, mask=mask
                 ) #z_t-1
@@ -334,6 +337,34 @@ class PredictorCorrector(Generic[Diffusable]):
                 )
                 batch = batch_.replace(**{k: v[0] for k, v in samples_means.items()})
                 mean_batch = mean_batch_.replace(**{k: v[1] for k, v in samples_means.items()})
+
+                score = self._score_fn(batch, t)
+
+                if self.diffusion_loss_fn is not None and (t < self._multi_corruption.T * 0.9).all():
+                    self._forward_guidance(batch, t, score)
+                    for _ in range(self.back_step):
+                        # Update the score with the backward universal guidance function
+                        x0 = self._diffusion_module._predict_x0(
+                            x=batch,
+                            t=t,
+                            score=score,
+                            get_alpha=True
+                        )
+                        self._backward_guidance(x0, t, score)
+
+                # Predictor updates to predict z_t-1
+                predictor_fns = {
+                    k: predictor.update_given_score for k, predictor in self._predictors.items()
+                }
+                samples_means = apply(
+                    fns=predictor_fns,
+                    x=batch,
+                    score=score,
+                    broadcast=dict(t=t, batch=batch, dt=dt),
+                    batch_idx=self._multi_corruption._get_batch_indices(batch),
+                )
+                if record:
+                    recorded_samples.append(batch.clone().to("cpu"))
 
             batch = batch_.clone()
             mean_batch = mean_batch_.clone()

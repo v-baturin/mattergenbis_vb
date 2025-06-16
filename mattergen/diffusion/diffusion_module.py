@@ -133,7 +133,7 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
 
         return noisy_batch, t
 
-    def _predict_x0(self, x: T, t: torch.Tensor, score: T | None = None ) -> T:
+    def _predict_x0(self, x: T, t: torch.Tensor, score: T | None = None, get_alpha : bool = False) -> T:
         """Predict the x_0 from a batch of data at a given timestep
 
         Args:
@@ -149,7 +149,8 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
         if score is None:
             # If score is not provided, calculate it using the score function
             score = self.score_fn(x, t)
-
+        if get_alpha:
+            alpha_dict = {}
         # Estimate x_0_hat for pos and cell using the Ancestral Sampling Formula
         x0_hat = {}
         for field in replace_kwargs:
@@ -162,15 +163,26 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
             batch_idx=self.corruption._get_batch_indices(x)[field],
             batch=x
             )
+            if get_alpha:
+                alpha_dict[field] = alpha_t
             x0_hat[field] = (getattr(x, field) + sigma_t**2 * score[field]) / alpha_t
 
         # Create a new ChemGraphBatch estimating x0 with requires_grad=True for pos and cell    
-        x0 = ChemGraphBatch(
-            atomic_numbers=x.atomic_numbers,
-            pos=x0_hat["pos"].clone().detach().requires_grad_(True),
-            cell=x0_hat["cell"].clone().detach().requires_grad_(True),
-            batch=x.batch,
-        )
+        if get_alpha:
+            x0 = ChemGraphBatch(
+                atomic_numbers=x.atomic_numbers,
+                pos=x0_hat["pos"].clone().detach().requires_grad_(True),
+                cell=x0_hat["cell"].clone().detach().requires_grad_(True),
+                batch=x.batch,
+                alpha=alpha_dict,  # Include alpha values in the batch
+            )
+        else:
+            x0 = ChemGraphBatch(
+                atomic_numbers=x.atomic_numbers,
+                pos=x0_hat["pos"].clone().detach().requires_grad_(True),
+                cell=x0_hat["cell"].clone().detach().requires_grad_(True),
+                batch=x.batch,
+            )
         return x0
         
     def score_fn(self, x: T, t: torch.Tensor) -> T:
