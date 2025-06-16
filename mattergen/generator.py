@@ -188,6 +188,7 @@ class CrystalGenerator:
     num_batches: int | None = None
     target_compositions_dict: list[dict[str, float]] | None = None
     num_atoms_distribution: str = "ALEX_MP_20"
+    gpu_memory_gb: float = 8.0  # minimum GPU memory in GB to use for generation
 
     # Conditional generation
     diffusion_guidance_factor: float = 0.0
@@ -350,7 +351,7 @@ class CrystalGenerator:
         if self._model is not None:
             return
         model = load_model_diffusion(self.checkpoint_info)
-        model = model.to(get_device(min_gpu_mem_gb=8))
+        model = model.to(get_device(min_gpu_mem_gb=self.gpu_memory_gb))
         self._model = model
         self._cfg = self.checkpoint_info.config
 

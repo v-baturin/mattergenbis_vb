@@ -34,6 +34,7 @@ def main(
     diffusion_loss_weight: float = 1.0,
     print_loss: bool = False,
     self_rec_steps: int = 1,
+    gpu_memory_gb: int = 8,
 ):
     """
     Evaluate diffusion model against molecular metrics.
@@ -121,6 +122,7 @@ def main(
         diffusion_loss_weight=diffusion_loss_weight,   # NEW
         print_loss=print_loss,  # NEW
         self_rec_steps=self_rec_steps, # NEW
+        gpu_memory_gb=gpu_memory_gb,
     )
     generator.generate(output_dir=Path(output_path))
     print(f"Generated structures saved to {output_path}")
