@@ -34,7 +34,7 @@ from mattergen.common.utils.data_utils import (
     lattice_params_to_matrix_torch,
     radius_graph_pbc,
 )
-from mattergen.common.utils.globals import MODELS_PROJECT_ROOT, get_device, get_pyg_device
+from mattergen.common.utils.globals import MODELS_PROJECT_ROOT, get_device_name, get_pyg_device
 from mattergen.common.utils.lattice_score import edge_score_to_lattice_score_frac_symmetric
 
 
@@ -382,7 +382,7 @@ class GemNetT(torch.nn.Module):
         value = torch.arange(idx_s.size(0), device=idx_s.device, dtype=idx_s.dtype)
         # Possibly contains multiple copies of the same edge (for periodic interactions)
         pyg_device = get_pyg_device() if idx_s.device != torch.device("cpu") else idx_s.device
-        torch_device = get_device() if idx_s.device != torch.device("cpu") else idx_s.device
+        torch_device = get_device_name() if idx_s.device != torch.device("cpu") else idx_s.device
         adj = SparseTensor(
             row=idx_t.to(pyg_device),
             col=idx_s.to(pyg_device),
