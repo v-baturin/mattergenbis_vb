@@ -8,17 +8,24 @@
 import os
 from functools import lru_cache
 from pathlib import Path
+import psutil
 
 import torch
 from omegaconf import OmegaConf
 
 
 @lru_cache
-def get_device() -> torch.device:
+def get_device(min_gpu_mem_gb=8) -> torch.device:
+    """
+    Returns a GPU device with at least min_gpu_mem_gb free memory, if available.
+    Otherwise, returns CPU.
+    """
     if torch.cuda.is_available():
-        return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
+        for i in range(torch.cuda.device_count()):
+            free_mem_bytes, _ = torch.cuda.mem_get_info(i)
+            if free_mem_bytes >= min_gpu_mem_gb* (1024 ** 3):
+                return torch.device(f"cuda:{i}")
+    print(f"No GPU with at least {min_gpu_mem_gb} GB free memory found. Falling back to CPU.")
     return torch.device("cpu")
 
 

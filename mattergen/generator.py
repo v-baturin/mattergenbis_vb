@@ -350,7 +350,7 @@ class CrystalGenerator:
         if self._model is not None:
             return
         model = load_model_diffusion(self.checkpoint_info)
-        model = model.to(get_device())
+        model = model.to(get_device(min_gpu_mem_gb=8))
         self._model = model
         self._cfg = self.checkpoint_info.config
 
