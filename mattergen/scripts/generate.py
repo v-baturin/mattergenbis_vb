@@ -30,7 +30,7 @@ def main(
     diffusion_guidance_factor: float | None = None,
     strict_checkpoint_loading: bool = True,
     target_compositions: list[dict[str, int]] | None = None,
-    guidance: dict | None = None,
+    guidance: dict | str | None = None,
     diffusion_loss_weight: float = 1.0,
     print_loss: bool = False,
     self_rec_steps: int = 1,
@@ -51,7 +51,10 @@ def main(
         strict_checkpoint_loading: Whether to raise an exception when not all parameters from the checkpoint can be matched to the model.
         target_compositions: List of dictionaries with target compositions to condition on. Each dictionary should have the form `{element: number_of_atoms}`. If None, the target compositions are not conditioned on.
            Only supported for models trained for crystal structure prediction (CSP) (default: None)
-        diffusion_loss
+        guidance: Dictionary with guidance parameters for the diffusion model. The keys are the names of the properties to condition on, and the values are the target values for those properties.
+        diffusion_loss_weight: Weight for the diffusion loss. (default: 1.0)
+        print_loss: Whether to print the loss during generation. (default: False)
+        self_rec_steps: Number of self-recurrence steps to perform during generation. (default: 1)
 
     NOTE: When specifying dictionary values via the CLI, make sure there is no whitespace between the key and value, e.g., `--properties_to_condition_on={key1:value1}`.
     """
@@ -92,11 +95,11 @@ def main(
     if guidance is not None:
         # Ensure guidance is a dictionary with string keys and numeric values
         if not isinstance(guidance, dict) or not all(
-            isinstance(k, str) and (isinstance(v, (int, float)) or isinstance(v, list))
+            isinstance(k, str) and (isinstance(v, (int, float)) or isinstance(v, list) or isinstance(v,dict))
             for k, v in guidance.items()
         ):
             raise ValueError(
-                "Guidance must be a dictionary with string keys and numeric values or lists."
+                "Guidance must be a dictionary with string keys and numeric values or lists or dict."
             )
         # Create the combined loss function based on the provided guidance
         loss_fn = make_combined_loss(guidance)
@@ -120,15 +123,15 @@ def main(
         self_rec_steps=self_rec_steps, # NEW
     )
     generator.generate(output_dir=Path(output_path))
+    print(f"Generated structures saved to {output_path}")
 
 
 def _main():
     # use fire instead of argparse to allow for the specification of dictionary values via the CLI
-    fire.Fire(main)
+    #fire.Fire(main)
     #this line is for debugging purposes, to run the script directly
-    #fire.Fire(main, command='"results/chemical_system/Pd-Ni-H_guided"   --pretrained-name=chemical_system   --batch_size=50   --properties_to_condition_on="{\'chemical_system\':\'Pd-Ni-H\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0   --guidance="{\'volume\': 30.935}"   --diffusion_loss_weight=1.0   --print_loss=True   --self_rec_steps=3')
-
+    fire.Fire(main, command='"results/chemical_system/Pd-Ni-H_rec_3_unguided"   --pretrained-name=chemical_system   --batch_size=100   --properties_to_condition_on="{\'chemical_system\':\'Li-Co-O\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0   --guidance="{\'environment\': {\'Co-O\':6}}"   --diffusion_loss_weight=0.0   --print_loss=True --self_rec_steps=3' )
 
 if __name__ == "__main__":
     _main()
-#mattergen-generate "results/chemical_system/Pd-Ni-H_test"   --pretrained-name=chemical_system   --batch_size=1   --properties_to_condition_on="{'chemical_system':'Pd-Ni-H'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0   --guidance="{'volume': 30.935}"   --diffusion_loss_weight=1   --print_loss=True
+#mattergen-generate "results/chemical_system/Pd-Ni-H_env"   --pretrained-name=chemical_system   --batch_size=1   --properties_to_condition_on="{'chemical_system':'Li-Co-O'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0   --guidance="{'environment': {'Co-O':6}}"   --diffusion_loss_weight=1.0   --print_loss=True

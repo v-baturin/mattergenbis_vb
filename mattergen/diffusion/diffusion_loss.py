@@ -43,9 +43,45 @@ def volume_loss(x, t, target):
     return 10**-5*loss
 
 def compute_species_pair(
+    cell: torch.Tensor,         # (B, 3, 3) or (3, 3)
+    frac: torch.Tensor,         # (B, N, 3) or (N, 3)
+    atomic_numbers: torch.Tensor, # (B, N) or (N,)
+    type_A: int,
+    type_B: int,
+    kernel: str = "gaussian",
+    sigma: float = 1.0,
+    r_cut: float | None = None,
+    alpha: float = 8.0
+) -> torch.Tensor:
+    """
+    Supports batched or single structures.
+    Returns: (B,) if batched, scalar if single.
+    """
+    # If not batched, add batch dimension
+    if cell.ndim == 2:
+        cell = cell.unsqueeze(0)
+        frac = frac.unsqueeze(0)
+        atomic_numbers = atomic_numbers.unsqueeze(0)
+        squeeze_out = True
+    else:
+        squeeze_out = False
+
+    B = cell.shape[0]
+    results = []
+    for b in range(B):
+        res = _compute_species_pair_single(
+            cell[b], frac[b], atomic_numbers[b], type_A, type_B, kernel, sigma, r_cut, alpha
+        )
+        results.append(res)
+    out = torch.stack(results)
+    if squeeze_out:
+        out = out.squeeze(0)
+    return out
+
+def _compute_species_pair_single(
     cell: torch.Tensor,
     frac: torch.Tensor,
-    atomic_numbers: list[int],
+    types: torch.Tensor,
     type_A: int,
     type_B: int,
     kernel: str = "gaussian",
@@ -75,8 +111,6 @@ def compute_species_pair(
       f_AB (scalar Tensor), with gradients flowing to cell and positions.
     """
     device = frac.device
-    atomic_numbers = torch.tensor(atomic_numbers, dtype=torch.long, device=device)
-    types = atomic_numbers
     mask_A = (types == type_A)
     mask_B = (types == type_B)
     idx_A = mask_A.nonzero(as_tuple=True)[0]
@@ -160,32 +194,34 @@ def environment_loss(
     if cell is None:
         raise ValueError("ChemGraph has no cell attribute set.")
     
-    frac = x.frac
+    frac = x.pos
     atomic_numbers = x.atomic_numbers
 
     # Prepare target pairs and values as lists
     species_pairs = list(target.keys())
     target_values = list(target.values())
-    num_pairs = len(species_pairs)
-    f_AB = torch.empty(num_pairs, dtype=cell.dtype, device=cell.device)
-    for i, species_pair in enumerate(species_pairs):
+    f_AB_list = []
+    for species_pair in species_pairs:
         if '-' not in species_pair:
             raise ValueError(f"Invalid species pair format: {species_pair}. Expected format 'A-B'.")
         type_A, type_B = (Element(sym).Z for sym in species_pair.split('-'))
-        f_AB[i] = compute_species_pair(
-            cell=cell,
-            frac=frac,
-            atomic_numbers=atomic_numbers,
-            type_A=type_A,
-            type_B=type_B,
-            kernel=kernel,
-            sigma=sigma,
-            r_cut=r_cut,
-            alpha=alpha
+        f_AB_list.append(
+            compute_species_pair(
+                cell=cell,
+                frac=frac,
+                atomic_numbers=atomic_numbers,
+                type_A=type_A,
+                type_B=type_B,
+                kernel=kernel,
+                sigma=sigma,
+                r_cut=r_cut,
+                alpha=alpha
+            )
         )
+    f_AB = torch.stack(f_AB_list)
     
     # Ensure target is broadcastable
-    target_tensor = torch.tensor(target_values, dtype=f_AB.dtype, device=f_AB.device)
+    target_tensor = torch.tensor(target_values, dtype=f_AB.dtype, device=f_AB.device, requires_grad=True)
     
     # Compute the loss
     loss = torch.abs(f_AB - target_tensor)
