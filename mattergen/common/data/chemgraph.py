@@ -152,6 +152,13 @@ class ChemGraph(pyg_data.Data):
 
         return data
 
+    def _grad_copy(self) -> "ChemGraph":
+        """Returns a shallow copy of the ChemGraph with gradients enabled."""
+        out = self.replace()
+        for key, value in out:
+            if isinstance(value, Tensor):
+                out[key] = value.clone().requires_grad_(True)
+        return out
 
 # Retrieve a pointer for the DynamicInheritance-based PYG Batch class.
 # For typing reasons only, use isinstance(pyg_data.Batch) for runtime checks.

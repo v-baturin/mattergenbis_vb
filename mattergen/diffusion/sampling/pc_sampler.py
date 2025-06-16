@@ -181,7 +181,7 @@ class PredictorCorrector(Generic[Diffusable]):
         self.diffusion_loss_fn = diffusion_loss_fn
         self.diffusion_loss_weight = diffusion_loss_weight
 
-        def _backward_guidance(self, x0: Diffusable, t: torch.Tensor, score) -> Diffusable:
+    def _backward_guidance(self, x0: Diffusable, t: torch.Tensor, score) -> Diffusable:
             """Update the score with the backward universal guidance function."""
             grad_dict = {}
             replace_kwargs = ["pos", "cell"]
@@ -207,7 +207,7 @@ class PredictorCorrector(Generic[Diffusable]):
     def _forward_guidance(self, batch: Diffusable, t: torch.Tensor, score) -> Diffusable:
         """Update the score with the forward universal guidance function."""
         # Compute x0|xt
-        batch_ = batch.clone().detach().requires_grad(True)
+        batch_ = batch._grad_copy()  # Create a shallow copy with gradients enabled
         with torch.set_grad_enabled(True):
             x0 = self.diffusion_module._predict_x0(
                 x=batch_,
