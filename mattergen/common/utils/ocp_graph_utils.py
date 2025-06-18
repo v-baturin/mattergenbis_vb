@@ -55,6 +55,11 @@ def get_pbc_distances(
 
     return out
 
+def safe_int_max(tensor, max_value):
+    val = tensor.max().item()
+    if val == float('inf') or val != val:  # also catches NaN
+        val = max_value
+    return min(int(val), max_value)
 
 def radius_graph_pbc(
     pos: torch.Tensor,
@@ -190,9 +195,9 @@ def radius_graph_pbc(
     # useful in case we encounter an extremely skewed or small lattice that
     # results in an explosion of the number of images considered.
     max_rep = [
-        min(int(rep_a1.max()), max_cell_images_per_dim),
-        min(int(rep_a2.max()), max_cell_images_per_dim),
-        min(int(rep_a3.max()), max_cell_images_per_dim),
+        safe_int_max(rep_a1, max_cell_images_per_dim),
+        safe_int_max(rep_a2, max_cell_images_per_dim),
+        safe_int_max(rep_a3, max_cell_images_per_dim),
     ]
 
     # Tensor of unit cells
