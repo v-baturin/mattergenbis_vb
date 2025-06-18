@@ -61,7 +61,7 @@ def compute_species_pair(
     if cell.ndim == 2:
         cell = cell.unsqueeze(0)
         frac = frac.unsqueeze(0)
-        atomic_numbers = atomic_numbers.unsqueeze(0)
+        atomic_numbers = atomic_numbers.unsqueeze(0)  
         squeeze_out = True
     else:
         squeeze_out = False

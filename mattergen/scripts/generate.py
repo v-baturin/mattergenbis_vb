@@ -136,8 +136,10 @@ def _main():
     # use fire instead of argparse to allow for the specification of dictionary values via the CLI
     #fire.Fire(main)
     #this line is for debugging purposes, to run the script directly
-    fire.Fire(main, command='"results/Li-Co-O_guided_env_3-2_2"   --pretrained-name=chemical_system   --batch_size=50   --properties_to_condition_on="{\'chemical_system\':\'Li-Co-O\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0  --guidance="{\'environment\': {\'Co-O\':6}}" --diffusion_loss_weight=1.0   --print_loss=False --self_rec_steps=3 --back_step=2' )
+    fire.Fire(main, command='"results/Li-Co-O_guided_env_3-2_3"   --pretrained-name=chemical_system   --batch_size=50   --properties_to_condition_on="{\'chemical_system\':\'Li-Co-O\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0  --guidance="{\'environment\': {\'Co-O\':6}}" --diffusion_loss_weight=1.0   --print_loss=False --self_rec_steps=3 --back_step=2' )
 
 if __name__ == "__main__":
     _main()
 #mattergen-generate "results/chemical_system/Pd-Ni-H_env"   --pretrained-name=chemical_system   --batch_size=1   --properties_to_condition_on="{'chemical_system':'Li-Co-O'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0   --guidance="{'environment': {'Co-O':6}}"   --diffusion_loss_weight=1.0   --print_loss=True
+
+#mattergen-generate "results/Li-Co-O_guided_env_3-2_3"   --pretrained-name=chemical_system   --batch_size=50   --properties_to_condition_on="{\'chemical_system\':\'Li-Co-O\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0  --guidance="{\'environment\': {\'Co-O\':6}}" --diffusion_loss_weight=1.0   --print_loss=False --self_rec_steps=3 --back_step=2'
