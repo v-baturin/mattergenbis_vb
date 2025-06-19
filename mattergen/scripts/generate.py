@@ -72,6 +72,13 @@ def main(
     if not os.path.exists(output_path):
         os.makedirs(output_path)
 
+    # Save only the input parameters
+    with open(os.path.join(output_path, "input_parameters.txt"), "w") as f:
+        for k, v in locals().items():
+            if k == "f":
+                continue
+            f.write(f"{k}: {v}\n")
+
     sampling_config_overrides = sampling_config_overrides or []
     config_overrides = config_overrides or []
     # Disable generating element types which are not supported or not in the desired chemical
@@ -134,9 +141,9 @@ def main(
 
 def _main():
     # use fire instead of argparse to allow for the specification of dictionary values via the CLI
-    fire.Fire(main)
+    #fire.Fire(main)
     #this line is for debugging purposes, to run the script directly
-    #fire.Fire(main, command='"results/Li-Co-O_guided_env_3-2_3"   --pretrained-name=chemical_system   --batch_size=50   --properties_to_condition_on="{\'chemical_system\':\'Li-Co-O\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0  --guidance="{\'environment\': {\'Co-O\':6}}" --diffusion_loss_weight=1.0   --print_loss=False --self_rec_steps=3 --back_step=2' )
+    fire.Fire(main, command='"results/Li-Co-O_test"   --pretrained-name=chemical_system   --batch_size=5   --properties_to_condition_on="{\'chemical_system\':\'Li-Co-O\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0  --guidance="{\'environment\': {\'Co-O\':6, \'O-O\':2}}" --diffusion_loss_weight=1.0   --print_loss=False --self_rec_steps=3 --back_step=2' )
 
 if __name__ == "__main__":
     _main()

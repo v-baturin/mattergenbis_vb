@@ -221,7 +221,7 @@ def environment_loss(
     f_AB = torch.stack(f_AB_list)
     
     # Ensure target is broadcastable
-    target_tensor = torch.tensor(target_values, dtype=f_AB.dtype, device=f_AB.device, requires_grad=True)
+    target_tensor = torch.tensor(target_values, dtype=f_AB.dtype, device=f_AB.device, requires_grad=True).unsqueeze(1)
     
     # Compute the loss
     loss = torch.abs(f_AB - target_tensor)
