@@ -338,6 +338,28 @@ class PredictorCorrector(Generic[Diffusable]):
                 batch = batch_.replace(**{k: v[0] for k, v in samples_means.items()})
                 mean_batch = mean_batch_.replace(**{k: v[1] for k, v in samples_means.items()})
 
+                ############## Algorithm 2 ############
+                # Corrector updates.
+                if self._correctors:
+                    for _ in range(self._n_steps_corrector):
+                        score = self._score_fn(batch, t)
+                        fns = {
+                            k: corrector.step_given_score for k, corrector in self._correctors.items()
+                        }
+                        samples_means: dict[str, Tuple[torch.Tensor, torch.Tensor]] = apply(
+                            fns=fns,
+                            broadcast={"t": t, "dt": dt},
+                            x=batch,
+                            score=score,
+                            batch_idx=self._multi_corruption._get_batch_indices(batch),
+                        )
+                        if record:
+                            recorded_samples.append(batch.clone().to("cpu"))
+                        batch, mean_batch = _mask_replace(
+                            samples_means=samples_means, batch=batch, mean_batch=mean_batch, mask=mask
+                        )
+                ############## Algorithm 2 ############
+
                 score = self._score_fn(batch, t)
 
                 if self.diffusion_loss_fn is not None and (t < self._multi_corruption.T * 0.9).all():
