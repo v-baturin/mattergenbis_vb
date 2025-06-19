@@ -389,10 +389,9 @@ class PredictorCorrector(Generic[Diffusable]):
                 if record:
                     recorded_samples.append(batch.clone().to("cpu"))
 
-            batch = batch_.clone()
-            mean_batch = mean_batch_.clone()
-
-                # Update batch and mean_batch ie z_t
+            batch, mean_batch = _mask_replace(
+                    samples_means=samples_means, batch=batch, mean_batch=mean_batch, mask=mask
+                ) # Update batch and mean_batch ie z_t (the previous z_{t-1})
 
         return batch, mean_batch, recorded_samples
 

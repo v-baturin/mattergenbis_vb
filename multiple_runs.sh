@@ -1,6 +1,16 @@
 #!/bin/bash
 
-for X in {4..10}; do
+for X in {1..2}; do
+    mattergen-generate "results/Li-Co-O_non_guided_${X}" \
+        --pretrained-name=chemical_system \
+        --batch_size=250 \
+        --properties_to_condition_on="{'chemical_system':'Li-Co-O'}" \
+        --record_trajectories=False \
+        --diffusion_guidance_factor=2.0 >> log.txt 2>&1
+    echo "Generated unguided samples for Li-Co-O at step $X"
+done
+
+for X in {11..20}; do
     mattergen-generate "results/Li-Co-O_guided_env_3-2_${X}" \
         --pretrained-name=chemical_system \
         --batch_size=50 \
