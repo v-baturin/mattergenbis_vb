@@ -36,6 +36,7 @@ def main(
     self_rec_steps: int = 1,
     back_step: int = 0,
     gpu_memory_gb: int = 8,
+    algo: bool = False,
 ):
     """
     Evaluate diffusion model against molecular metrics.
@@ -59,6 +60,7 @@ def main(
         self_rec_steps: Number of self-recurrence steps to perform during generation. (default: 1)
         back_step: Number of steps of backward updates to do during generation. (default: 0)
         gpu_memory_gb: Amount of GPU memory in GB to use for the generation. (default: 8)
+        algo: Algorithm to use for the generation. Algorithm 1 (False) does the correction outside the self recurrence loop, and Algorithm 2 (True) does it inside. (default: False)
 
     NOTE: When specifying dictionary values via the CLI, make sure there is no whitespace between the key and value, e.g., `--properties_to_condition_on={key1:value1}`.
     """
@@ -134,6 +136,7 @@ def main(
         self_rec_steps=self_rec_steps, # NEW
         back_step=back_step, # NEW
         gpu_memory_gb=gpu_memory_gb, # NEW
+        algo=algo,  # NEW
     )
     generator.generate(output_dir=Path(output_path))
     print(f"Generated structures saved to {output_path}")
@@ -141,9 +144,9 @@ def main(
 
 def _main():
     # use fire instead of argparse to allow for the specification of dictionary values via the CLI
-    #fire.Fire(main)
+    fire.Fire(main)
     #this line is for debugging purposes, to run the script directly
-    fire.Fire(main, command='"results/Li-Co-O_test"   --pretrained-name=chemical_system   --batch_size=5   --properties_to_condition_on="{\'chemical_system\':\'Li-Co-O\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0  --guidance="{\'environment\': {\'Co-O\':6, \'O-O\':2}}" --diffusion_loss_weight=1.0   --print_loss=False --self_rec_steps=3 --back_step=2' )
+    #fire.Fire(main, command='"results/Li-Co-O_test"   --pretrained-name=chemical_system   --batch_size=5   --properties_to_condition_on="{\'chemical_system\':\'Li-Co-O\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0  --guidance="{\'environment\': {\'Co-O\':6, \'O-O\':2}}" --diffusion_loss_weight=1.0   --print_loss=False --self_rec_steps=3 --back_step=2' )
 
 if __name__ == "__main__":
     _main()

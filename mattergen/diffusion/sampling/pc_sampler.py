@@ -42,6 +42,7 @@ class PredictorCorrector(Generic[Diffusable]):
         self_rec_steps: int = 1,
         back_step: int = 0,  # Number of steps to go back in the predictor-corrector loop
         print_loss_history: bool = False,  # Flag to control printing of loss history
+        algo: bool = False,  # Algorithm type
     ):
         """
         Args:
@@ -340,7 +341,7 @@ class PredictorCorrector(Generic[Diffusable]):
 
                 ############## Algorithm 2 ############
                 # Corrector updates.
-                if self._correctors:
+                if self._correctors and self.algo:
                     for _ in range(self._n_steps_corrector):
                         score = self._score_fn(batch, t)
                         fns = {
