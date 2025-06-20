@@ -6,7 +6,7 @@
 results/
 mattergen.egg-info/
 log.txt
-log?.txt
+log*.txt
 
 #Material files
 *.vasp

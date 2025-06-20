@@ -1,34 +1,34 @@
 #!/bin/bash
 
-for X in {1..2}; do
-    mattergen-generate "results/Li-Co-O_non_guided_${X}" \
-        --pretrained-name=chemical_system \
-        --batch_size=250 \
-        --properties_to_condition_on="{'chemical_system':'Li-Co-O'}" \
-        --record_trajectories=False \
-        --diffusion_guidance_factor=2.0 >> log.txt 2>&1
-    echo "Generated unguided samples for Li-Co-O at step $X"
-done
+NB=50
+DIR="results/Li-Co-O_guided_3_env_3-2_"
 
-for X in {11..20}; do
-    mattergen-generate "results/Li-Co-O_guided_env_3-2_${X}" \
+"" >> log1.txt
+
+for X in {1..20}; do
+    echo "Generating $NB samples for Li-Co-O"
+    start_time=$(date +%s)
+    mattergen-generate "$DIR${X}" \
         --pretrained-name=chemical_system \
-        --batch_size=50 \
+        --batch_size=$NB \
         --properties_to_condition_on="{'chemical_system':'Li-Co-O'}" \
         --record_trajectories=False \
         --diffusion_guidance_factor=2.0 \
-        --guidance="{'environment': {'Co-O':6}}" \
+        --guidance="{'environment': {'Co-O':3}}" \
         --diffusion_loss_weight=1.0 \
         --print_loss=False \
         --self_rec_steps=3 \
         --back_step=2 >> log1.txt 2>&1
-    echo "Generated samples for Li-Co-O with environment Co-O:6 at step $X"
+    end_time=$(date +%s)
+    duration=$((end_time - start_time))
+    echo "Generated samples for Li-Co-O with environment Co-O:3 at step $X"
+    echo "Duration: ${duration} seconds at $(date +%H:%M:%S)"
 done
 
-main_file="/Data/auguste.de-lambilly/mattergenbis/results/Li-Co-O_guided_env_3-2/generated_crystals.extxyz"
+main_file="/Data/auguste.de-lambilly/mattergenbis/${DIR}1/generated_crystals.extxyz"
 
-for X in {2..10}; do
-    src="/Data/auguste.de-lambilly/mattergenbis/results/Li-Co-O_guided_env_3-2_${X}/generated_crystals.extxyz"
+for X in {2..20}; do
+    src="/Data/auguste.de-lambilly/mattergenbis/results/${DIR}${X}/generated_crystals.extxyz"
     if [ -f "$src" ]; then
         cat "$src" >> "$main_file"
     else

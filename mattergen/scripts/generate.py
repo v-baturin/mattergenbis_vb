@@ -79,6 +79,9 @@ def main(
         for k, v in locals().items():
             if k == "f":
                 continue
+            if k == "algo":
+                f.write(f"{k}: {int(v)+1}\n")
+                continue
             f.write(f"{k}: {v}\n")
 
     sampling_config_overrides = sampling_config_overrides or []

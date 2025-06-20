@@ -391,7 +391,7 @@ class PredictorCorrector(Generic[Diffusable]):
 
             batch, mean_batch = _mask_replace(
                     samples_means=samples_means, batch=batch, mean_batch=mean_batch, mask=mask
-                ) # Update batch and mean_batch ie z_t (the previous z_{t-1})
+                ) # Update batch and mean_batch ie z_t (the previous z_{t-1}finalise)
 
         return batch, mean_batch, recorded_samples
 
