@@ -3,9 +3,9 @@
 NB=50
 DIR="results/Li-Co-O_guided_3_env_3-2_"
 
-"" >> log1.txt
+echo "" >> log1.txt
 
-for X in {1..20}; do
+for X in {12..20}; do
     echo "Generating $NB samples for Li-Co-O"
     start_time=$(date +%s)
     mattergen-generate "$DIR${X}" \
@@ -28,7 +28,7 @@ done
 main_file="/Data/auguste.de-lambilly/mattergenbis/${DIR}1/generated_crystals.extxyz"
 
 for X in {2..20}; do
-    src="/Data/auguste.de-lambilly/mattergenbis/results/${DIR}${X}/generated_crystals.extxyz"
+    src="/Data/auguste.de-lambilly/mattergenbis/${DIR}${X}/generated_crystals.extxyz"
     if [ -f "$src" ]; then
         cat "$src" >> "$main_file"
     else

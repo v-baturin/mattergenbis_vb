@@ -35,7 +35,7 @@ def main(
     print_loss: bool = False,
     self_rec_steps: int = 1,
     back_step: int = 0,
-    gpu_memory_gb: int = 8,
+    gpu_memory_gb: float | None = None,
     algo: bool = False,
 ):
     """
@@ -59,7 +59,7 @@ def main(
         print_loss: Whether to print the loss during generation. (default: False)
         self_rec_steps: Number of self-recurrence steps to perform during generation. (default: 1)
         back_step: Number of steps of backward updates to do during generation. (default: 0)
-        gpu_memory_gb: Amount of GPU memory in GB to use for the generation. (default: 8)
+        gpu_memory_gb: Amount of GPU memory in GB to use for the generation. (default: batch_size * 0,336)
         algo: Algorithm to use for the generation. Algorithm 1 (False) does the correction outside the self recurrence loop, and Algorithm 2 (True) does it inside. (default: False)
 
     NOTE: When specifying dictionary values via the CLI, make sure there is no whitespace between the key and value, e.g., `--properties_to_condition_on={key1:value1}`.
@@ -70,6 +70,10 @@ def main(
     assert (
         pretrained_name is None or model_path is None
     ), "Only one of pretrained_name or model_path can be provided."
+
+    if gpu_memory_gb is None:
+        # Default GPU memory is 336 MB per batch size
+        gpu_memory_gb = batch_size * 0.336
 
     if not os.path.exists(output_path):
         os.makedirs(output_path)
