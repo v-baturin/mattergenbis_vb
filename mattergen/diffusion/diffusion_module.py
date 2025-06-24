@@ -171,16 +171,16 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
         if get_alpha:
             x0 = ChemGraphBatch(
                 atomic_numbers=x.atomic_numbers,
-                pos=x0_hat["pos"].clone().detach().requires_grad_(True),
-                cell=x0_hat["cell"].clone().detach().requires_grad_(True),
+                pos=x0_hat["pos"].requires_grad_(True),
+                cell=x0_hat["cell"].requires_grad_(True),
                 batch=x.batch,
                 alpha=alpha_dict,  # Include alpha values in the batch
             )
         else:
             x0 = ChemGraphBatch(
                 atomic_numbers=x.atomic_numbers,
-                pos=x0_hat["pos"].clone().detach().requires_grad_(True),
-                cell=x0_hat["cell"].clone().detach().requires_grad_(True),
+                pos=x0_hat["pos"].requires_grad_(True),
+                cell=x0_hat["cell"].requires_grad_(True),
                 batch=x.batch,
             )
         return x0

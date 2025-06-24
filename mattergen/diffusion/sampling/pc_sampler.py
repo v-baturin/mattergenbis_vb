@@ -205,6 +205,7 @@ class PredictorCorrector(Generic[Diffusable]):
                     alpha_t = x0.alpha[k]
                     if (alpha_t<1).all():
                         score[k] = score[k] + alpha_t**0.5 / (1-alpha_t) * grad_dict[k]
+                        print(f"Backward guidance applied for {k} with strength: {alpha_t**0.5 / (1-alpha_t) * grad_dict[k]}")
             pass
 
     def _forward_guidance(self, batch: Diffusable, t: torch.Tensor, score) -> Diffusable:
@@ -235,6 +236,7 @@ class PredictorCorrector(Generic[Diffusable]):
         for k in grad_dict:
             if k in score:
                 score[k] = score[k] - self.diffusion_loss_weight * grad_dict[k]
+                print(f"Forward guidance applied for {k} with strength: {-self.diffusion_loss_weight * grad_dict[k]}")
         pass
     
     def forward_corruption(self, batch_k: Diffusable, t: torch.Tensor, s: torch.Tensor, k: str, batch_idx: torch.Tensor | None = None) -> Tuple[Diffusable, torch.Tensor]:

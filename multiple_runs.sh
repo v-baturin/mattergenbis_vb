@@ -1,11 +1,11 @@
 #!/bin/bash
 
 NB=50
-DIR="results/Li-Co-O_guided_3_env_3-2_"
+DIR="results/Li-Co-O_guided_env3_g10_3-2_"
 
-echo "" >> log1.txt
+echo "" > log1.txt
 
-for X in {12..20}; do
+for X in {1..20}; do
     echo "Generating $NB samples for Li-Co-O"
     start_time=$(date +%s)
     mattergen-generate "$DIR${X}" \
@@ -15,7 +15,7 @@ for X in {12..20}; do
         --record_trajectories=False \
         --diffusion_guidance_factor=2.0 \
         --guidance="{'environment': {'Co-O':3}}" \
-        --diffusion_loss_weight=1.0 \
+        --diffusion_loss_weight=10.0 \
         --print_loss=False \
         --self_rec_steps=3 \
         --back_step=2 >> log1.txt 2>&1
