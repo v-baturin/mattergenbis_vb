@@ -1,11 +1,14 @@
 #!/bin/bash
 
-NB=50
-DIR="results/Li-Co-O_guided_env3_g10_3-2_"
+NB=20
+LOG="log2.txt"
+MUL=50
+BASE="/Data/auguste.de-lambilly/mattergenbis/"
+DIR="results/Li-Co-O_guided_env3_3-2_"
 
-echo "" > log1.txt
+echo "" > $LOG
 
-for X in {1..20}; do
+for X in $(seq 1 "$MUL"); do
     echo "Generating $NB samples for Li-Co-O"
     start_time=$(date +%s)
     mattergen-generate "$DIR${X}" \
@@ -15,7 +18,7 @@ for X in {1..20}; do
         --record_trajectories=False \
         --diffusion_guidance_factor=2.0 \
         --guidance="{'environment': {'Co-O':3}}" \
-        --diffusion_loss_weight=10.0 \
+        --diffusion_loss_weight=1.0 \
         --print_loss=False \
         --self_rec_steps=3 \
         --back_step=2 >> log1.txt 2>&1
@@ -25,13 +28,15 @@ for X in {1..20}; do
     echo "Duration: ${duration} seconds at $(date +%H:%M:%S)"
 done
 
-main_file="/Data/auguste.de-lambilly/mattergenbis/${DIR}1/generated_crystals.extxyz"
+main_file="${BASE}/${DIR}1/generated_crystals.extxyz"
 
-for X in {2..20}; do
-    src="/Data/auguste.de-lambilly/mattergenbis/${DIR}${X}/generated_crystals.extxyz"
+for X in $(seq 2 "$MUL"); do
+    src="${BASE}/${DIR}${X}/generated_crystals.extxyz"
     if [ -f "$src" ]; then
         cat "$src" >> "$main_file"
     else
         echo "Warning: $src does not exist, skipping."
     fi
 done
+
+echo "Everything copied to $main_file"
