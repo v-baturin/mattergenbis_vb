@@ -120,7 +120,7 @@ def _compute_species_pair_single(
     idx_B = mask_B.nonzero(as_tuple=True)[0]
 
     if idx_A.numel() == 0 or idx_B.numel() == 0:
-        return cell.sum(dim=1) * 0.0 # No A or B atoms, return 0
+        return cell.sum() * 0.0 # No A or B atoms, return 0
     
     # Prepare cutoffs if needed
     if r_cut is None:
@@ -159,7 +159,7 @@ def _compute_species_pair_single(
     n_A = mask_A.sum()
     if n_A < 1e-8:
         # to keep the graph differentiable, return 0
-        return cell.sum(dim=1) * 0.0
+        return cell.sum() * 0.0
     f_AB = G.sum() / n_A - int(type_A == type_B) # Subtract self-interaction 
     return f_AB
 

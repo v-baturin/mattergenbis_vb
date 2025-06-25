@@ -205,7 +205,7 @@ class PredictorCorrector(Generic[Diffusable]):
                     alpha_t = x0.alpha[k]
                     if (alpha_t<1).all():
                         score[k] = score[k] + alpha_t**0.5 / (1-alpha_t) * grad_dict[k]
-                        if grad_dict[k].abs().max() > 0.0001:  # Only print if the gradient is significant:
+                        if grad_dict[k].abs().max() > 0.0:  # Only print if the gradient is significant:
                             print(f"Backward guidance applied for {k} with strength: {alpha_t**0.5 / (1-alpha_t) * grad_dict[k]}")
             del grad_dict  # Clean up the gradient dictionary
             pass
@@ -238,7 +238,7 @@ class PredictorCorrector(Generic[Diffusable]):
         for k in grad_dict:
             if k in score:
                 score[k] = score[k] - self.diffusion_loss_weight * grad_dict[k]
-                if (abs(grad_dict[k])>0.0001).any():  # Only print if the gradient is significant:
+                if (abs(grad_dict[k])>0.0).any():  # Only print if the gradient is significant:
                     print(f"Forward guidance applied for {k} with strength: {-self.diffusion_loss_weight * grad_dict[k]}")
         del batch_  # Clean up the temporary batch with gradients
         del grad_dict  # Clean up the gradient dictionary
