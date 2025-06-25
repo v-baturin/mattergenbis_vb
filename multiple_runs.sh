@@ -21,7 +21,7 @@ for X in $(seq 1 "$MUL"); do
         --diffusion_loss_weight=1.0 \
         --print_loss=False \
         --self_rec_steps=3 \
-        --back_step=2 >> log1.txt 2>&1
+        --back_step=2 >> $LOG 2>&1
     end_time=$(date +%s)
     duration=$((end_time - start_time))
     echo "Generated samples for Li-Co-O with environment Co-O:3 at step $X"
