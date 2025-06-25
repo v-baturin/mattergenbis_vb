@@ -71,11 +71,12 @@ def compute_species_pair(
     results = []
     count = 0
     for b in range(B):
+        count_ = count+num_atoms[b]
         res = _compute_species_pair_single(
-            cell[b], frac[b], atomic_numbers[count:count+num_atoms[b]], type_A, type_B, kernel, sigma, r_cut, alpha
+            cell[b], frac[count:count_], atomic_numbers[count:count_], type_A, type_B, kernel, sigma, r_cut, alpha
         )
         results.append(res)
-        count += num_atoms[b]
+        count = count_
     out = torch.stack(results)
     if squeeze_out:
         out = out.squeeze(0)
@@ -113,6 +114,7 @@ def _compute_species_pair_single(
     Returns:
       f_AB (scalar Tensor), with gradients flowing to cell and positions.
     """
+    print(frac)
     device = frac.device
     mask_A = (types == type_A)
     mask_B = (types == type_B)
