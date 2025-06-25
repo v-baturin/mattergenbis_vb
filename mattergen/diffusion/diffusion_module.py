@@ -171,6 +171,7 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
         if get_alpha:
             x0 = ChemGraphBatch(
                 atomic_numbers=x.atomic_numbers,
+                num_atoms=x.num_atoms,
                 pos=x0_hat["pos"].requires_grad_(True),
                 cell=x0_hat["cell"].requires_grad_(True),
                 batch=x.batch,
@@ -179,6 +180,7 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
         else:
             x0 = ChemGraphBatch(
                 atomic_numbers=x.atomic_numbers,
+                num_atoms=x.num_atoms,
                 pos=x0_hat["pos"].requires_grad_(True),
                 cell=x0_hat["cell"].requires_grad_(True),
                 batch=x.batch,

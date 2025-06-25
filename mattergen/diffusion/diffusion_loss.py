@@ -45,7 +45,8 @@ def volume_loss(x, t, target):
 def compute_species_pair(
     cell: torch.Tensor,         # (B, 3, 3) or (3, 3)
     frac: torch.Tensor,         # (B, N, 3) or (N, 3)
-    atomic_numbers: torch.Tensor, # (B, N) or (N,)
+    atomic_numbers: torch.Tensor, # (\Sum N_i)
+    num_atoms: torch.Tensor, # Number of atoms in each material, (B,)
     type_A: int,
     type_B: int,
     kernel: str = "gaussian",
@@ -68,11 +69,13 @@ def compute_species_pair(
 
     B = cell.shape[0]
     results = []
+    count = 0
     for b in range(B):
         res = _compute_species_pair_single(
-            cell[b], frac[b], atomic_numbers[b], type_A, type_B, kernel, sigma, r_cut, alpha
+            cell[b], frac[b], atomic_numbers[count:count+num_atoms[b]], type_A, type_B, kernel, sigma, r_cut, alpha
         )
         results.append(res)
+        count += num_atoms[b]
     out = torch.stack(results)
     if squeeze_out:
         out = out.squeeze(0)
@@ -99,7 +102,7 @@ def _compute_species_pair_single(
     Args:
       cell      (3×3) Tensor: rows are lattice vectors.
       frac      (N×3) Tensor: fractional coords.
-      atomic_numbers list of N ints: atomic numbers.
+      types     list of N ints: atomic numbers.
       type_A    int: atomic number of species A (the one we want to compute the environment of).
       type_B    int: atomic number of species B (the one we are looking in the environment of species A).
       kernel    "gaussian" or "sigmoid"
@@ -117,8 +120,8 @@ def _compute_species_pair_single(
     idx_B = mask_B.nonzero(as_tuple=True)[0]
 
     if idx_A.numel() == 0 or idx_B.numel() == 0:
-        return torch.tensor(0.0, device=device, dtype=cell.dtype)
-
+        return cell.sum(dim=1) * 0.0 # No A or B atoms, return 0
+    
     # Prepare cutoffs if needed
     if r_cut is None:
         r_cut= INTER_ATOMIC_CUTOFF[type_A] + INTER_ATOMIC_CUTOFF[type_B] + 0.5  # (N, N)
@@ -155,7 +158,8 @@ def _compute_species_pair_single(
     # Sum over all pairs
     n_A = mask_A.sum()
     if n_A < 1e-8:
-        return torch.tensor(0.0, device=device, dtype=cell.dtype)
+        # to keep the graph differentiable, return 0
+        return cell.sum(dim=1) * 0.0
     f_AB = G.sum() / n_A - int(type_A == type_B) # Subtract self-interaction 
     return f_AB
 
@@ -196,6 +200,7 @@ def environment_loss(
     
     frac = x.pos
     atomic_numbers = x.atomic_numbers
+    num_atoms = x.num_atoms
 
     # Prepare target pairs and values as lists
     species_pairs = list(target.keys())
@@ -210,6 +215,7 @@ def environment_loss(
                 cell=cell,
                 frac=frac,
                 atomic_numbers=atomic_numbers,
+                num_atoms=num_atoms,
                 type_A=type_A,
                 type_B=type_B,
                 kernel=kernel,
@@ -221,12 +227,12 @@ def environment_loss(
     f_AB = torch.stack(f_AB_list)
     
     # Ensure target is broadcastable
-    target_tensor = torch.tensor(target_values, dtype=f_AB.dtype, device=f_AB.device, requires_grad=True).unsqueeze(1)
+    target_tensor = torch.tensor(target_values, dtype=f_AB.dtype, device=f_AB.device).unsqueeze(1)
     
     # Compute the loss
     loss = torch.abs(f_AB - target_tensor)
     
-    return loss.sum(dim=0)  # Sum over all pairs to get a single loss value
+    return 10**6 * loss.sum(dim=0)  # Sum over all pairs to get a single loss value
 
 INTER_ATOMIC_CUTOFF = {1: 0.31, 2: 0.28, 3: 1.28, 4: 0.96, 5: 0.84, 6: 0.76, 7: 0.71, 8: 0.66, 9: 0.57, 10: 0.58, 11: 1.66, 12: 1.41, 13: 1.21, 14: 1.11, 15: 1.07, 16: 1.05, 17: 1.02, 18: 1.06, 19: 2.03, 20: 1.76, 21: 1.7, 22: 1.6, 23: 1.53, 24: 1.39, 25: 1.39, 26: 1.32, 27: 1.26, 28: 1.24, 29: 1.32, 30: 1.22, 31: 1.22, 32: 1.2, 33: 1.19, 34: 1.2, 35: 1.2, 36: 1.16, 37: 2.2, 38: 1.95, 39: 1.9, 40: 1.75, 41: 1.64, 42: 1.54, 43: 1.47, 44: 1.46, 45: 1.42, 46: 1.39, 47: 1.45, 48: 1.44, 49: 1.42, 50: 1.39, 51: 1.39, 52: 1.38, 53: 1.39, 54: 1.4, 55: 2.44, 56: 2.15, 57: 2.07, 58: 2.04, 59: 2.03, 60: 2.01, 61: 1.99, 62: 1.98, 63: 1.98, 64: 1.96, 65: 1.94, 66: 1.92, 67: 1.92, 68: 1.89, 69: 1.9, 70: 1.87, 71: 1.87, 72: 1.75, 73: 1.7, 74: 1.62, 75: 1.51, 76: 1.44, 77: 1.41, 78: 1.36, 79: 1.36, 80: 1.32, 81: 1.45, 82: 1.46, 83: 1.48, 84: 1.4, 85: 1.5, 86: 1.5, 87: 2.6, 88: 2.21, 89: 2.15, 90: 2.06, 91: 2.0, 92: 1.96, 93: 1.9, 94: 1.87, 95: 1.8, 96: 1.69}
 
