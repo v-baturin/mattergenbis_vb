@@ -72,8 +72,8 @@ def main(
     ), "Only one of pretrained_name or model_path can be provided."
 
     if gpu_memory_gb is None:
-        # Default GPU memory is 400 MB per batch size
-        gpu_memory_gb = batch_size * 0.4
+        # Default GPU memory is 1.125 MB per batch size
+        gpu_memory_gb = batch_size * 1.125
 
     if not os.path.exists(output_path):
         os.makedirs(output_path)
