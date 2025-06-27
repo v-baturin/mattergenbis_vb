@@ -25,12 +25,19 @@ def get_device_name() -> torch.device:
     return device
 
 @lru_cache
-def get_device(min_gpu_mem_gb=8) -> torch.device:
+def get_device(min_gpu_mem_gb=8, force_gpu:int | None = None) -> torch.device:
     """
     Returns the GPU device with the most free memory, and at least min_gpu_mem_gb free memory, if available.
     Otherwise, returns CPU.
     """
     global device
+    if force_gpu is not None:
+        if torch.cuda.is_available() and force_gpu < torch.cuda.device_count():
+            device = torch.device(f"cuda:{force_gpu}")
+            print(f"Using requested GPU {force_gpu} with at least {min_gpu_mem_gb} GB free memory.")
+            return device
+        else:
+            print(f"Requested GPU {force_gpu} is not available. Checking for others.")
     if torch.cuda.is_available():
         max_mem = 0
         for i in range(torch.cuda.device_count()):
@@ -41,6 +48,7 @@ def get_device(min_gpu_mem_gb=8) -> torch.device:
     else :
         print(f"No GPU with at least {min_gpu_mem_gb} GB free memory found. Falling back to CPU.")
         device = torch.device("cpu")
+    print(f"Using device: {device} with at least {min_gpu_mem_gb} GB free memory.")
     return device
 
 

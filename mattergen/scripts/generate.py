@@ -37,6 +37,7 @@ def main(
     back_step: int = 0,
     gpu_memory_gb: float | None = None,
     algo: bool = False,
+    force_gpu: int | None = None,
 ):
     """
     Evaluate diffusion model against molecular metrics.
@@ -144,6 +145,7 @@ def main(
         back_step=back_step, # NEW
         gpu_memory_gb=gpu_memory_gb, # NEW
         algo=algo,  # NEW
+        force_gpu=force_gpu,  # NEW
     )
     generator.generate(output_dir=Path(output_path))
     print(f"Generated structures saved to {output_path}")
