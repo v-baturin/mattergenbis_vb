@@ -13,6 +13,7 @@ if [[ "$1" == "--help" ]]; then
     echo "  DIR  : Output directory prefix (default: results/Li-Co-O_guided_env3_3-2_)"
     echo "  G    : Diffusion loss weight (default: 1.0)"
     echo "  ALG  : Algorithm flag, True or False (default: True)"
+    echo "  GPU  : GPU index to use (optional, default: None)"
     echo ""
     echo "Example:"
     echo "  ./multiple_runs.sh 20 log2.txt 50 /Data/auguste.de-lambilly/mattergenbis/ results/Li-Co-O_guided_env3_3-2_ 1.0 True"
@@ -27,6 +28,7 @@ BASE=${4:-/Data/auguste.de-lambilly/mattergenbis/}
 DIR=${5:-results/Li-Co-O_guided_env3_3-2_}
 G=${6:-1.0}
 ALG=${7:-True}
+GPU=${8:-None}
 
 if [ "$ALG" == "True" ]; then
     al=2
@@ -50,7 +52,8 @@ for X in $(seq 1 "$MUL"); do
         --print_loss=False \
         --self_rec_steps=3 \
         --back_step=2 \
-        --algo=$ALG >> $LOG 2>&1
+        --algo=$ALG \
+        --force_gpu=$GPU >> $LOG 2>&1
     end_time=$(date +%s)
     duration=$((end_time - start_time))
     echo "Generated samples for Li-Co-O with environment Co-O:3 at step $X"
