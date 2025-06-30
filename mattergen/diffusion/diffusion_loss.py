@@ -61,8 +61,6 @@ def compute_species_pair(
     # If not batched, add batch dimension
     if cell.ndim == 2:
         cell = cell.unsqueeze(0)
-        frac = frac.unsqueeze(0)
-        atomic_numbers = atomic_numbers.unsqueeze(0)  
         squeeze_out = True
     else:
         squeeze_out = False
@@ -138,7 +136,7 @@ def _compute_species_pair_single(
     # Get frac for A and B
     frac_A = frac[idx_A]  # (n_A, 3)
     frac_B = frac[idx_B]  # (n_B, 3)
-
+    
     # Expand B atoms to all images
     frac_B_images = frac_B.unsqueeze(1) + shifts.unsqueeze(0)  # (n_B, 27, 3)
     frac_B_images = frac_B_images.reshape(-1, 3)  # (n_B*27, 3)
