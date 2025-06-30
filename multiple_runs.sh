@@ -30,11 +30,11 @@ MUL=${3:-50}
 BASE=${4:-/Data/auguste.de-lambilly/mattergenbis/}
 SYS=${5:-Li-Co-O}
 ENV=${6:-3}
-G=${6:-1.0}
-R=${6:-3}
-B=${7:-2}
-ALG=${8:-True}
-GPU=${9:-None}
+G=${7:-1.0}
+R=${8:-3}
+B=${9:-2}
+ALG=${10:-True}
+GPU=${11:-None}
 
 if [ "$ALG" == "True" ]; then
     al=2
