@@ -19,7 +19,7 @@ if [[ "$1" == "--help" ]]; then
     echo "  GPU  : GPU index to use (optional, default: None)"
     echo ""
     echo "Example:"
-    echo "  ./multiple_runs.sh 20 log2.txt 50 /Data/auguste.de-lambilly/mattergenbis/ Li-Co-O 3 1.0 3 2 True"
+    echo "  ./multiple_runs.sh 20 log2.txt 50 /Data/auguste.de-lambilly/mattergenbis/ Li-Co-O 3 1.0 3 2 True 0 plus"
     exit 0
 fi
 
@@ -35,6 +35,7 @@ R=${8:-3}
 B=${9:-2}
 ALG=${10:-True}
 GPU=${11:-None}
+NOTES=${12:-""}
 
 if [ "$ALG" == "True" ]; then
     al=2
@@ -49,6 +50,10 @@ if [ $G != 1.0 ]; then
 fi
 
 DIR=${DIR}"${R}-${B}_"
+
+if [ -n "$NOTES" ]; then
+    DIR=${DIR}"${NOTES}_"
+fi
 
 echo "" > $LOG
 
