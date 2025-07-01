@@ -4,6 +4,9 @@ from typing import Callable, Dict, Any
 from mattergen.common.data.chemgraph import ChemGraph
 from pymatgen.core import Element, Composition
 from pymatgen.analysis.phase_diagram import PhaseDiagram, PDEntry
+import pandas as pd
+from mattersim.forcefield import MatterSimCalculator
+from ase import Atoms
 
 def l2_distance_loss(x, t, target):
     # Example: x and target are tensors of the same shape
@@ -235,25 +238,47 @@ def environment_loss(
     return loss.sum(dim=0)  # Sum over all pairs to get a single loss value
 
 INTER_ATOMIC_CUTOFF = {1: 0.31, 2: 0.28, 3: 1.28, 4: 0.96, 5: 0.84, 6: 0.76, 7: 0.71, 8: 0.66, 9: 0.57, 10: 0.58, 11: 1.66, 12: 1.41, 13: 1.21, 14: 1.11, 15: 1.07, 16: 1.05, 17: 1.02, 18: 1.06, 19: 2.03, 20: 1.76, 21: 1.7, 22: 1.6, 23: 1.53, 24: 1.39, 25: 1.39, 26: 1.32, 27: 1.26, 28: 1.24, 29: 1.32, 30: 1.22, 31: 1.22, 32: 1.2, 33: 1.19, 34: 1.2, 35: 1.2, 36: 1.16, 37: 2.2, 38: 1.95, 39: 1.9, 40: 1.75, 41: 1.64, 42: 1.54, 43: 1.47, 44: 1.46, 45: 1.42, 46: 1.39, 47: 1.45, 48: 1.44, 49: 1.42, 50: 1.39, 51: 1.39, 52: 1.38, 53: 1.39, 54: 1.4, 55: 2.44, 56: 2.15, 57: 2.07, 58: 2.04, 59: 2.03, 60: 2.01, 61: 1.99, 62: 1.98, 63: 1.98, 64: 1.96, 65: 1.94, 66: 1.92, 67: 1.92, 68: 1.89, 69: 1.9, 70: 1.87, 71: 1.87, 72: 1.75, 73: 1.7, 74: 1.62, 75: 1.51, 76: 1.44, 77: 1.41, 78: 1.36, 79: 1.36, 80: 1.32, 81: 1.45, 82: 1.46, 83: 1.48, 84: 1.4, 85: 1.5, 86: 1.5, 87: 2.6, 88: 2.21, 89: 2.15, 90: 2.06, 91: 2.0, 92: 1.96, 93: 1.9, 94: 1.87, 95: 1.8, 96: 1.69}
+PDIAG = None
 
-def energy_hull(x):
+def energy_hull(x, t, target=None):
     """
-    Placeholder for energy hull loss function.
-    This is just a placeholder and should be replaced with an actual implementation.
+    Computes the energy above the hull for a given composition and energy.
+    x is a chemgraph batch
+    The function uses a precomputed phase diagram to determine the energy above the hull.
+    """
+    if not isinstance(x, tuple) or len(x) != 2:
+        raise ValueError("x must be a tuple of (composition, energy)")
+    
+    compo, energy = x
+    if not isinstance(compo, Composition):
+        raise ValueError("The first element of x must be a pymatgen Composition object")
+    
+    # Call the _energy_hull function with the composition and energy
+    return _energy_hull((compo, energy))
+
+def _energy_hull(x):
+    """
+    Computes the energy above the hull for a given composition and energy.
+    x is a ase.Atoms object
     CSV : Compo , Energy
     list = [ PDEntry(composition=Composition(comp), energy=energy) for comp, energy in csv.items() ]
     pd = PhaseDiagram(list)
     E = Mattersim(x)
     above_hull = pd.energy_above_hull(x,E) (save in phase_diagram)
     return above_hull
+    x = (compo,energy)
     """
-    dir = "phase_diagram/" # This should be the directory where the phase diagram is saved
-    csv = {}
-    list = [ PDEntry(composition=Composition(comp), energy=energy) for comp, energy in csv.items() ]
-    pd = PhaseDiagram(list)
-    E = Mattersim(x)
-    x_ = PDEntry(composition=Composition(x.composition), energy=E)  # Assuming x has composition and energy attributes
-    above_hull = pd.energy_above_hull(x_)
+    dir = "/Data/auguste.de-lambilly/mattergenbis/phase_diagram/" # This should be the directory where the phase diagram is saved
+    global PDIAG
+    if PDIAG is None:
+        # Load the CSV file only once
+        csv = pd.read_csv(dir + "LiCoO.csv")
+        li = [ PDEntry(composition=Composition(csv["Formula"][i]), energy=csv["Energy"][i]) for i in range(len(csv)) ]
+        PDIAG = PhaseDiagram(li)
+        del csv, li
+    #E = Mattersim(x)
+    x_ = PDEntry(composition = Composition(x.get_chemical_formula()), energy=x[1])  # Assuming x has composition and energy attributes
+    above_hull = PDIAG.get_e_above_hull(x_)
     return above_hull
 
 
@@ -291,6 +316,7 @@ LOSS_REGISTRY: Dict[str, Callable[..., torch.Tensor]] = {
     "l1_distance": l1_distance_loss,
     "volume": volume_loss,
     "environment": environment_loss,
+    "energy_hull": energy_hull,
     "new_loss": new_loss,  # Placeholder for a new loss function
     # Add more loss functions as needed
 }
