@@ -7,6 +7,7 @@ from pymatgen.analysis.phase_diagram import PhaseDiagram, PDEntry
 import pandas as pd
 from mattersim.forcefield import MatterSimCalculator
 from ase import Atoms
+from ase.data import chemical_symbols
 
 def l2_distance_loss(x, t, target):
     # Example: x and target are tensors of the same shape
@@ -241,6 +242,15 @@ INTER_ATOMIC_CUTOFF = {1: 0.31, 2: 0.28, 3: 1.28, 4: 0.96, 5: 0.84, 6: 0.76, 7: 
 PDIAG = None
 calc = None
 
+def composition(num, pos):
+    """
+    Computes the composition of a list of atoms.
+    li is a list of int with 101 beeing an empty atom.
+    Returns a list of strings with the chemical symbols of the atoms.
+    Example: [1, 101, 8, 8, 101] -> ['H', 'O', 'O']
+    """
+    return num[num != 101], pos[num != 101]
+
 def energy_hull(x, t, target=None):
     """
     Computes the energy above the hull for a given composition and energy.
@@ -255,11 +265,16 @@ def energy_hull(x, t, target=None):
 
     B = x.cell.shape[0]
     count = 0
+    e_hull = []
     for b in range(B):
         count_ = count+x.num_atoms[b]
-        x.cell[b], x.pos[count:count_], x.atomic_numbers[count:count_]
-
-    return _energy_hull((compo, energy))
+        comp, sc_pos = composition(x.atomic_numbers[count:count_], x.pos[count:count_])
+        atom = Atoms(comp, scaled_positions = sc_pos, cell = x.cell[b], pbc=True )
+        atom.calc = calc
+        energy = atom.get_potential_energy()  # Get the energy of the atoms
+        e_hull.append(_energy_hull((atom.get_chemical_formula(), energy)))
+        count = count_
+    return e_hull
 
 def _energy_hull(x):
     """
@@ -278,8 +293,6 @@ def _energy_hull(x):
     x_ = PDEntry(composition = Composition(x[0]), energy=x[1])  # Assuming x has composition and energy attributes
     above_hull = PDIAG.get_e_above_hull(x_)
     return above_hull
-
-
 
 def new_loss(x, t, target):
     """
