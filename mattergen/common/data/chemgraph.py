@@ -157,7 +157,7 @@ class ChemGraph(pyg_data.Data):
         out = self.replace()
         replace_kwargs = ["pos", "cell"]
         for key in replace_kwargs:
-            out[key] = out[key].clone().detach().requires_grad_(True) if self[key] is not None else None
+            out[key] = out[key].detach().requires_grad_(True) if self[key] is not None else None
         
         return out
 
