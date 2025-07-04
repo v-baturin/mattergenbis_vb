@@ -228,11 +228,13 @@ def environment_loss(
                 alpha=alpha
             )
         )
-    f_AB = torch.stack(f_AB_list)
+    f_AB = torch.stack(f_AB_list) # shape: (num_pairs, batch_size)
     
     # Ensure target is broadcastable
-    target_tensor = torch.tensor(target_values, dtype=f_AB.dtype, device=f_AB.device).unsqueeze(1)
-    
+    target_tensor = torch.tensor(target_values, dtype=f_AB.dtype, device=f_AB.device).unsqueeze(1) # (num_pairs, 1)
+    if target_tensor.shape[1] == 1 and f_AB.shape[1] > 1:
+        target_tensor = target_tensor.expand(-1, f_AB.shape[1])  # (num_pairs, batch_size)
+
     # Compute the loss
     loss = torch.nn.functional.huber_loss(f_AB, target_tensor, reduction='mean', delta = 1.0) 
     #loss = torch.abs(f_AB - target_tensor) #Huber ? eps sensitif ?
