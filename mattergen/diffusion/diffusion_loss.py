@@ -234,7 +234,8 @@ def environment_loss(
     target_tensor = torch.tensor(target_values, dtype=f_AB.dtype, device=f_AB.device).unsqueeze(1)
     
     # Compute the loss
-    loss = torch.abs(f_AB - target_tensor)
+    loss = torch.nn.functional.huber_loss(f_AB, target, reduction='mean', delta = 1.0) 
+    #loss = torch.abs(f_AB - target_tensor) #Huber ? eps sensitif ?
     
     return loss.sum(dim=0)  # Sum over all pairs to get a single loss value
 
