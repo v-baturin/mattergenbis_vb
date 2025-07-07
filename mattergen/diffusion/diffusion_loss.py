@@ -128,7 +128,7 @@ def _compute_species_pair_single(
     
     # Prepare cutoffs if needed
     if r_cut is None:
-        r_cut= INTER_ATOMIC_CUTOFF[type_A] + INTER_ATOMIC_CUTOFF[type_B] + 0.5  # (N, N)
+        r_cut= INTER_ATOMIC_CUTOFF[type_A] + INTER_ATOMIC_CUTOFF[type_B] + 1.0  # (N, N)
  
     # PBC images
     shifts = torch.stack(torch.meshgrid(
@@ -210,7 +210,13 @@ def environment_loss(
     species_pairs = list(target.keys())
     target_values = list(target.values())
     f_AB_list = []
+
+    # Extract mode if present
+    mode = target.get("mode", None)
+
     for species_pair in species_pairs:
+        if species_pair == "mode":
+            continue  # skip 'mode' key, already handled
         if '-' not in species_pair:
             raise ValueError(f"Invalid species pair format: {species_pair}. Expected format 'A-B'.")
         type_A, type_B = (Element(sym).Z for sym in species_pair.split('-'))
@@ -232,12 +238,15 @@ def environment_loss(
     
     # Ensure target is broadcastable
     target_tensor = torch.tensor(target_values, dtype=f_AB.dtype, device=f_AB.device).unsqueeze(1) # (num_pairs, 1)
-    if target_tensor.shape[1] == 1 and f_AB.shape[1] > 1:
+    if target_tensor.shape[1] == 1 and len(f_AB.shape) > 1:
         target_tensor = target_tensor.expand(-1, f_AB.shape[1])  # (num_pairs, batch_size)
 
     # Compute the loss
-    loss = torch.nn.functional.huber_loss(f_AB, target_tensor, reduction='mean', delta = 1.0) 
-    #loss = torch.abs(f_AB - target_tensor) #Huber ? eps sensitif ?
+    if mode == "l1" or mode == None:
+        loss = torch.abs(f_AB - target_tensor)
+    elif mode == "huber": 
+        loss = torch.nn.functional.huber_loss(f_AB, target_tensor, reduction='mean', delta = 1.0) 
+    # eps sensitif ?
     
     return loss.sum(dim=0)  # Sum over all pairs to get a single loss value
 
