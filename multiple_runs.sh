@@ -17,6 +17,7 @@ if [[ "$1" == "--help" ]]; then
     echo "  G    : Diffusion loss weight (default: 1.0)"
     echo "  ALG  : Algorithm flag, True or False (default: True)"
     echo "  GPU  : GPU index to use (optional, default: None)"
+    echo "  MOD  : Mode for the environment loss (default: None which means )"
     echo ""
     echo "Example:"
     echo "  ./multiple_runs.sh 20 log2.txt 50 /Data/auguste.de-lambilly/mattergenbis/ Li-Co-O 3 1.0 3 2 True 0 plus"
@@ -35,7 +36,7 @@ R=${8:-3}
 B=${9:-2}
 ALG=${10:-True}
 GPU=${11:-None}
-NOTES=${12:-""}
+MOD=${12:-None}
 
 if [ "$ALG" == "True" ]; then
     al=2
@@ -51,7 +52,7 @@ fi
 
 DIR=${DIR}"${R}-${B}_"
 
-if [ -n "$NOTES" ]; then
+if [ "$MOD" != "None" ]; then
     DIR=${DIR}"${NOTES}_"
 fi
 
@@ -66,7 +67,7 @@ for X in $(seq 1 "$MUL"); do
         --properties_to_condition_on="{'chemical_system':'${SYS}'}" \
         --record_trajectories=False \
         --diffusion_guidance_factor=2.0 \
-        --guidance="{'environment': {'Co-O':$ENV}}" \
+        --guidance="{'environment': {'mode':$MOD,'Co-O':$ENV}}" \
         --diffusion_loss_weight=$G \
         --print_loss=False \
         --self_rec_steps=$R \
