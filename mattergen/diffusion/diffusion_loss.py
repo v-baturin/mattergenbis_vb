@@ -206,13 +206,13 @@ def environment_loss(
     atomic_numbers = x.atomic_numbers
     num_atoms = x.num_atoms
 
+    # Extract mode if present
+    mode = target.pop("mode", None)
+
     # Prepare target pairs and values as lists
     species_pairs = list(target.keys())
     target_values = list(target.values())
     f_AB_list = []
-
-    # Extract mode if present
-    mode = target.get("mode", None)
 
     for species_pair in species_pairs:
         if species_pair == "mode":
