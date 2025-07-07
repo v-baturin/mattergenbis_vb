@@ -242,11 +242,15 @@ def environment_loss(
         target_tensor = target_tensor.expand(-1, f_AB.shape[1])  # (num_pairs, batch_size)
 
     # Compute the loss
-    if mode == "l1" or mode == None:
+    if mode == "l1" or mode == None or mode == "test":
         loss = torch.abs(f_AB - target_tensor)
     elif mode == "huber": 
         loss = torch.nn.functional.huber_loss(f_AB, target_tensor, reduction='mean', delta = 1.0) 
     # eps sensitif ?
+    elif mode == "l2":
+        loss = torch.nn.functional.mse_loss(f_AB, target_tensor, reduction='none')
+    else:
+        raise ValueError(f"Unknown mode: {mode}. Supported modes are 'l1', 'huber', and 'l2'.")
     
     return loss.sum(dim=0)  # Sum over all pairs to get a single loss value
 

@@ -40,21 +40,23 @@ MOD=${12:-None}
 
 if [ "$ALG" == "True" ]; then
     al=2
-    DIR="results/${SYS}_guided2_env${ENV}_" 
+    SUF="_guided2_env${ENV}_" 
 else
     al=1
-    DIR="results/${SYS}_guided_env${ENV}_"
+    SUF="_guided_env${ENV}_"
 fi
 
 if [ $G != 1.0 ]; then
-    DIR=${DIR}"g${G}_"
+    SUF=${SUF}"g${G}_"
 fi
 
-DIR=${DIR}"${R}-${B}_"
+SUF=${SUF}"${R}-${B}"
 
 if [ "$MOD" != "None" ]; then
-    DIR=${DIR}"${NOTES}_"
+    SUF=${SUF}"_${NOTES}"
 fi
+
+DIR="results/${SYS}${SUF}_"
 
 echo "" > $LOG
 
@@ -80,9 +82,9 @@ for X in $(seq 1 "$MUL"); do
     echo "Duration: ${duration} seconds at $(date +%H:%M:%S)"
 done
 
-main_file="${BASE}${DIR}1/generated_crystals.extxyz"
+main_file="${BASE}results/${SYS}/generated_crystals${SUF}.extxyz"
 
-for X in $(seq 2 "$MUL"); do
+for X in $(seq 1 "$MUL"); do
     src="${BASE}${DIR}${X}/generated_crystals.extxyz"
     if [ -f "$src" ]; then
         cat "$src" >> "$main_file"
