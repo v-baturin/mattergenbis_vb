@@ -16,12 +16,14 @@ fi
 # Default values for parameters
 MUL=${1:-50}
 BASE=${2:-/Data/auguste.de-lambilly/mattergenbis/}
-DIR=${3:-results/Li-Co-O_guided_env3_3-2_}
+SYS=${3:Li-Co-O}
+SUF=${4:-_guided_env3_3-2}
 
-main_file="${BASE}/${DIR}1/generated_crystals.extxyz"
+main_file="${BASE}results/${SYS}/generated_crystals${SUF}.extxyz"
+DIR="results/${SYS}${SUF}_"
 
-for X in $(seq 2 "$MUL"); do
-    src="${BASE}/${DIR}${X}/generated_crystals.extxyz"
+for X in $(seq 1 "$MUL"); do
+    src="${BASE}${DIR}${X}/generated_crystals.extxyz"
     if [ -f "$src" ]; then
         cat "$src" >> "$main_file"
     else
