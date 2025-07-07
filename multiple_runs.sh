@@ -79,10 +79,10 @@ for X in $(seq 1 "$MUL"); do
     echo "Duration: ${duration} seconds at $(date +%H:%M:%S)"
 done
 
-main_file="${BASE}/${DIR}1/generated_crystals.extxyz"
+main_file="${BASE}${DIR}1/generated_crystals.extxyz"
 
 for X in $(seq 2 "$MUL"); do
-    src="${BASE}/${DIR}${X}/generated_crystals.extxyz"
+    src="${BASE}${DIR}${X}/generated_crystals.extxyz"
     if [ -f "$src" ]; then
         cat "$src" >> "$main_file"
     else
