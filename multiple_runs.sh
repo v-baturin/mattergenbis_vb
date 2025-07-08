@@ -40,10 +40,10 @@ MOD=${12:-None}
 
 if [ "$ALG" == "True" ]; then
     al=2
-    SUF="_guided2_env${ENV}_" 
+    SUF="_guided2_" 
 else
     al=1
-    SUF="_guided_env${ENV}_"
+    SUF="_guided_"
 fi
 
 if [ $G != 1.0 ]; then
@@ -69,7 +69,7 @@ for X in $(seq 1 "$MUL"); do
         --properties_to_condition_on="{'chemical_system':'${SYS}'}" \
         --record_trajectories=False \
         --diffusion_guidance_factor=2.0 \
-        --guidance="{'environment': {'mode':$MOD,'Co-O':$ENV}}" \
+        --guidance="{'environment': {'mode':$MOD, $ENV}}" \
         --diffusion_loss_weight=$G \
         --print_loss=False \
         --self_rec_steps=$R \
