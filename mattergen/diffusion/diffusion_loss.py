@@ -133,12 +133,14 @@ def _compute_species_pair_single(
         r_cut= INTER_ATOMIC_CUTOFF[type_A] + INTER_ATOMIC_CUTOFF[type_B] + 1.0  # (N, N)
  
     # PBC images
-    shifts = torch.stack(torch.meshgrid(
-        torch.arange(-1, 2, device=device),
-        torch.arange(-1, 2, device=device),
-        torch.arange(-1, 2, device=device),
-        indexing='ij'
-    ), dim=-1).reshape(-1, 3)  # (27, 3)
+    global shifts
+    if shifts is None:
+        shifts = torch.stack(torch.meshgrid(
+            torch.arange(-1, 2, device=device),
+            torch.arange(-1, 2, device=device),
+            torch.arange(-1, 2, device=device),
+            indexing='ij'
+        ), dim=-1).reshape(-1, 3)  # (27, 3)
 
     # Get frac for A and B
     frac_A = frac[idx_A]  # (n_A, 3)
@@ -175,13 +177,13 @@ def environment_loss(
     target: dict,
     kernel: str = "sigmoid",
     sigma: float = 1.0,
-    r_cut: float | None = None,
     alpha: float = 8.0
 ) -> torch.Tensor:
     """
     Computes the environment loss for a given ChemGraph.
-    Example of target: {'O-H': 1, 'O-C': 1, 'C-C': 2}
-    Meaning that the environment of O should have 1 H and 1 C, and the environment of C should have 2 C.
+    Example of target: {'O-H': 1, 'O-C': [1,2.0], 'C-C': 2}
+    Meaning that the environment of O should have 1 H and 1 C but with a r_cut of 2.0 for C, and the environment of C should have 2 C.
+    The non-specified distance will be using the default r_cut, which is the sum of the covalent radii of the two species plus 1.0.
     The function computes the environment loss for the specified species in the ChemGraph.
     The loss is computed as the absolute difference between the computed environment and the target value.
 
@@ -211,12 +213,18 @@ def environment_loss(
     # Extract mode if present
     mode = target.pop("mode", None)
 
+    global species_pairs
+    global target_values
+    global r_cuts
+
     # Prepare target pairs and values as lists
-    species_pairs = list(target.keys())
-    target_values = list(target.values())
+    if species_pairs is None or target_values is None:
+        species_pairs = list(target.keys())
+        target_values = [v[0] if isinstance(v, list) else v for v in target.values()]
+        r_cuts =  [v[1] if isinstance(v, list) else None for v in target.values()]
     f_AB_list = []
 
-    for species_pair in species_pairs:
+    for species_pair, r_cut in zip(species_pairs,r_cuts):
         if species_pair == "mode":
             continue  # skip 'mode' key, already handled
         if '-' not in species_pair:
@@ -240,9 +248,11 @@ def environment_loss(
     f_AB = torch.stack(f_AB_list) # shape: (num_pairs, batch_size)
     
     # Ensure target is broadcastable
-    target_tensor = torch.tensor(target_values, dtype=f_AB.dtype, device=f_AB.device).unsqueeze(1) # (num_pairs, 1)
-    if target_tensor.shape[1] == 1 and len(f_AB.shape) > 1:
-        target_tensor = target_tensor.expand(-1, f_AB.shape[1])  # (num_pairs, batch_size)
+    global target_tensor
+    if target_tensor is None:
+        target_tensor = torch.tensor(target_values, dtype=f_AB.dtype, device=f_AB.device).unsqueeze(1) # (num_pairs, 1)
+        if target_tensor.shape[1] == 1 and len(f_AB.shape) > 1:
+            target_tensor = target_tensor.expand(-1, f_AB.shape[1])  # (num_pairs, batch_size)
 
     # Compute the loss
     if mode == "l1" or mode == None or mode == "test":
@@ -262,6 +272,11 @@ def environment_loss(
 INTER_ATOMIC_CUTOFF = {1: 0.31, 2: 0.28, 3: 1.28, 4: 0.96, 5: 0.84, 6: 0.76, 7: 0.71, 8: 0.66, 9: 0.57, 10: 0.58, 11: 1.66, 12: 1.41, 13: 1.21, 14: 1.11, 15: 1.07, 16: 1.05, 17: 1.02, 18: 1.06, 19: 2.03, 20: 1.76, 21: 1.7, 22: 1.6, 23: 1.53, 24: 1.39, 25: 1.39, 26: 1.32, 27: 1.26, 28: 1.24, 29: 1.32, 30: 1.22, 31: 1.22, 32: 1.2, 33: 1.19, 34: 1.2, 35: 1.2, 36: 1.16, 37: 2.2, 38: 1.95, 39: 1.9, 40: 1.75, 41: 1.64, 42: 1.54, 43: 1.47, 44: 1.46, 45: 1.42, 46: 1.39, 47: 1.45, 48: 1.44, 49: 1.42, 50: 1.39, 51: 1.39, 52: 1.38, 53: 1.39, 54: 1.4, 55: 2.44, 56: 2.15, 57: 2.07, 58: 2.04, 59: 2.03, 60: 2.01, 61: 1.99, 62: 1.98, 63: 1.98, 64: 1.96, 65: 1.94, 66: 1.92, 67: 1.92, 68: 1.89, 69: 1.9, 70: 1.87, 71: 1.87, 72: 1.75, 73: 1.7, 74: 1.62, 75: 1.51, 76: 1.44, 77: 1.41, 78: 1.36, 79: 1.36, 80: 1.32, 81: 1.45, 82: 1.46, 83: 1.48, 84: 1.4, 85: 1.5, 86: 1.5, 87: 2.6, 88: 2.21, 89: 2.15, 90: 2.06, 91: 2.0, 92: 1.96, 93: 1.9, 94: 1.87, 95: 1.8, 96: 1.69}
 PDIAG = None
 calc = None
+species_pairs = None
+target_values = None
+r_cuts = None
+target_tensor = None
+shifts = None
 
 def composition(num, pos):
     """
