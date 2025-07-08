@@ -202,9 +202,8 @@ class PredictorCorrector(Generic[Diffusable]):
                 grad_dict[field] = grad
             for k in grad_dict:
                 if k in score:
-                    alpha_t = x0.alpha[k]
-                    if (alpha_t<1).all():
-                        score[k] = score[k] - alpha_t**0.5 / (1-alpha_t) * grad_dict[k] # + in theory ?
+                    alpha_t, sigma_t = x0.alpha[k]
+                    score[k] = score[k] + alpha_t / (sigma_t**2) * grad_dict[k] # + in theory ?
             del grad_dict  # Clean up the gradient dictionary
             pass
 

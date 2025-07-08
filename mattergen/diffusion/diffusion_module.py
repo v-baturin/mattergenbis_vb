@@ -164,7 +164,7 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
             batch=x
             )
             if get_alpha:
-                alpha_dict[field] = alpha_t
+                alpha_dict[field] = (alpha_t,sigma_t)
             x0_hat[field] = (getattr(x, field) + sigma_t**2 * score[field]) / alpha_t
 
         # Create a new ChemGraphBatch estimating x0 with requires_grad=True for pos and cell    
