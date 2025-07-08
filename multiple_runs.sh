@@ -20,7 +20,7 @@ if [[ "$1" == "--help" ]]; then
     echo "  MOD  : Mode for the environment loss (default: None which means l1)"
     echo ""
     echo "Example:"
-    echo "  ./multiple_runs.sh 20 log2.txt 50 /Data/auguste.de-lambilly/mattergenbis/ Li-Co-O 3 1.0 3 2 True 0 plus"
+    echo "  ./multiple_runs.sh 20 log2.txt 50 /Data/auguste.de-lambilly/mattergenbis/ Li-Co-O "'Co-O':3" 1.0 3 2 True 0 plus"
     exit 0
 fi
 
