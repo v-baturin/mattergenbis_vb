@@ -3,7 +3,7 @@
 
 if [[ "$1" == "--help" ]]; then
     echo "Usage:"
-    echo "  ./multiple_runs.sh NB LOG MUL BASE DIR G ALG"
+    echo "  ./multiple_runs.sh NB LOG MUL BASE SYS ENV G R B ALG [GPU] [MOD]"
     echo ""
     echo "Arguments:"
     echo "  NB   : Number of samples per run (default: 20)"
@@ -11,13 +11,13 @@ if [[ "$1" == "--help" ]]; then
     echo "  MUL  : Number of runs (default: 50)"
     echo "  BASE : Base directory for results (default: /Data/auguste.de-lambilly/mattergenbis/)"
     echo "  SYS  : System to generate "
-    echo "  ENV  : Environment for the system (default: 3)"
+    echo "  ENV  : Environment conditions for the system (default: 'Co-O':3)"
     echo "  R    : Self-recursion steps (default: 3)"
     echo "  B    : Back step (default: 2)"
     echo "  G    : Diffusion loss weight (default: 1.0)"
     echo "  ALG  : Algorithm flag, True or False (default: True)"
     echo "  GPU  : GPU index to use (optional, default: None)"
-    echo "  MOD  : Mode for the environment loss (default: None which means )"
+    echo "  MOD  : Mode for the environment loss (default: None which means l1)"
     echo ""
     echo "Example:"
     echo "  ./multiple_runs.sh 20 log2.txt 50 /Data/auguste.de-lambilly/mattergenbis/ Li-Co-O 3 1.0 3 2 True 0 plus"
@@ -30,7 +30,7 @@ LOG=${2:-log2.txt}
 MUL=${3:-50}
 BASE=${4:-/Data/auguste.de-lambilly/mattergenbis/}
 SYS=${5:-Li-Co-O}
-ENV=${6:-3}
+ENV=${6:-"'Co-O':3"}
 G=${7:-1.0}
 R=${8:-3}
 B=${9:-2}
