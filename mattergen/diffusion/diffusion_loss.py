@@ -57,7 +57,8 @@ def compute_species_pair(
     kernel: str = "gaussian",
     sigma: float = 1.0,
     r_cut: float | None = None,
-    alpha: float = 8.0
+    alpha: float = 8.0,
+    mode: str | None = None
 ) -> torch.Tensor:
     """
     Supports batched or single structures.
@@ -76,7 +77,7 @@ def compute_species_pair(
     for b in range(B):
         count_ = count+num_atoms[b]
         res = _compute_species_pair_single(
-            cell[b], frac[count:count_], atomic_numbers[count:count_], type_A, type_B, kernel, sigma, r_cut, alpha
+            cell[b], frac[count:count_], atomic_numbers[count:count_], type_A, type_B, kernel, sigma, r_cut, alpha, mode
         )
         results.append(res)
         count = count_
@@ -94,7 +95,8 @@ def _compute_species_pair_single(
     kernel: str = "gaussian",
     sigma: float = 1.0,
     r_cut: float | None = None,
-    alpha: float = 8.0
+    alpha: float = 8.0,
+    mode: str | None = None
 ) -> torch.Tensor:
     """
     Compute a differentiable species‐pair value f[A,B], where
@@ -231,7 +233,8 @@ def environment_loss(
                 kernel=kernel,
                 sigma=sigma,
                 r_cut=r_cut,
-                alpha=alpha
+                alpha=alpha,
+                mode=mode
             )
         )
     f_AB = torch.stack(f_AB_list) # shape: (num_pairs, batch_size)
@@ -244,11 +247,13 @@ def environment_loss(
     # Compute the loss
     if mode == "l1" or mode == None or mode == "test":
         loss = torch.abs(f_AB - target_tensor)
+    elif mode == "l2":
+        loss = torch.nn.functional.mse_loss(f_AB, target_tensor, reduction='none')
     elif mode == "huber": 
         loss = torch.nn.functional.huber_loss(f_AB, target_tensor, reduction='mean', delta = 1.0) 
     # eps sensitif ?
-    elif mode == "l2":
-        loss = torch.nn.functional.mse_loss(f_AB, target_tensor, reduction='none')
+    elif mode == "divergence":
+        pass  # Placeholder for divergence loss, not implemented
     else:
         raise ValueError(f"Unknown mode: {mode}. Supported modes are 'l1', 'huber', and 'l2'.")
     
