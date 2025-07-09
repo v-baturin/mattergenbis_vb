@@ -20,6 +20,10 @@ SYS=${3:Li-Co-O}
 SUF=${4:-_guided_env3_3-2}
 
 main_file="${BASE}results/${SYS}/generated_crystals${SUF}.extxyz"
+if [ ! -f "$main_file" ]; then
+    echo "Creating main file $main_file."
+    touch "$main_file"
+fi
 DIR="results/${SYS}${SUF}_"
 
 for X in $(seq 1 "$MUL"); do
