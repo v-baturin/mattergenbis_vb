@@ -18,7 +18,7 @@ def get_total_gpu_memory():
     return [int(x) for x in result.decode().strip().split('\n')]
 
 
-logfile = "log_multiple1.txt" 
+logfile = "log_multiple.txt" 
 
 gpu_mem_log = []
 
