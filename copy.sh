@@ -6,10 +6,11 @@ if [[ "$1" == "--help" ]]; then
     echo "Arguments:"
     echo "  MUL  : Number of runs (default: 50)"
     echo "  BASE : Base directory for results (default: /Data/auguste.de-lambilly/mattergenbis/)"
-    echo "  DIR  : Output directory prefix (default: results/Li-Co-O_guided_env3_3-2_)"
+    echo "  SYS  : System to generate (default: Li-Co-O)"
+    echo "  SUF  : Suffix for the results directory (default: _guided_env3_3-2)"
     echo ""
     echo "Example:"
-    echo "  ./copy.sh 50 /Data/auguste.de-lambilly/mattergenbis/ results/Li-Co-O_guided_env3_3-2_"
+    echo "  ./copy.sh 50 /Data/auguste.de-lambilly/mattergenbis/ Li-Co-O _guided_env3_3-2_"
     exit 0
 fi
 
