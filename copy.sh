@@ -23,6 +23,9 @@ SUF=${4:-_guided_env3_3-2}
 main_file="${BASE}results/${SYS}/generated_crystals${SUF}.extxyz"
 if [ ! -f "$main_file" ]; then
     echo "Creating main file $main_file."
+    if [ ! -d "$(dirname "$main_file")" ]; then
+        mkdir -p "$(dirname "$main_file")"
+    fi
     touch "$main_file"
 fi
 DIR="results/${SYS}${SUF}_"
