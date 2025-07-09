@@ -53,7 +53,7 @@ fi
 SUF=${SUF}"${R}-${B}"
 
 if [ "$MOD" != "None" ]; then
-    SUF=${SUF}"_${NOTES}"
+    SUF=${SUF}"_${MOD}"
 fi
 
 DIR="results/${SYS}${SUF}_"
@@ -83,6 +83,10 @@ for X in $(seq 1 "$MUL"); do
 done
 
 main_file="${BASE}results/${SYS}/generated_crystals${SUF}.extxyz"
+# Create the main file if it doesn't exist
+if [ ! -f "$main_file" ]; then
+    touch "$main_file"
+fi
 
 for X in $(seq 1 "$MUL"); do
     src="${BASE}${DIR}${X}/generated_crystals.extxyz"
