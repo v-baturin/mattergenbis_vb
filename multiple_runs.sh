@@ -35,8 +35,8 @@ G=${7:-1.0}
 R=${8:-3}
 B=${9:-2}
 ALG=${10:-True}
-GPU=${11:-None}
-MOD=${12:-None}
+MOD=${11:-None}
+GPU=${12:-None}
 
 if [ "$ALG" == "True" ]; then
     al=2
@@ -54,6 +54,10 @@ SUF=${SUF}"${R}-${B}"
 
 if [ "$MOD" != "None" ]; then
     SUF=${SUF}"_${MOD}"
+fi
+
+if [ "$GPU" != "None" ]; then
+    SUF=${SUF}"_gpu${GPU}"
 fi
 
 DIR="results/${SYS}${SUF}_"
