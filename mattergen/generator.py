@@ -369,7 +369,7 @@ class CrystalGenerator:
         target_compositions_dict: list[dict[str, float]] | None = None,
         output_dir: str = "outputs",
         diffusion_loss_fn: Callable | None = None,  # NEW
-        diffusion_loss_weight: float = 1.0,         # NEW
+        diffusion_loss_weight: float | None = None,         # NEW
     ) -> list[Structure]:
         # Prioritize the runtime provided batch_size, num_batches and target_compositions_dict
         batch_size = batch_size or self.batch_size

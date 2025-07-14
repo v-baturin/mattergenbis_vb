@@ -200,6 +200,8 @@ class PredictorCorrector(Generic[Diffusable]):
                 if grad is None:
                     grad = torch.zeros_like(getattr(x0, field))
                 grad_dict[field] = grad
+            #if grad_dict['pos'].sum() != 0 or grad_dict['cell'].sum() != 0:
+            #   print(grad_dict, diffusion_loss)
             for k in grad_dict:
                 if k in score:
                     alpha_t, sigma_t = x0.alpha[k]
@@ -232,6 +234,8 @@ class PredictorCorrector(Generic[Diffusable]):
             if grad is None:
                 grad = torch.zeros_like(getattr(x0, field))
             grad_dict[field] = grad
+        #if grad_dict['pos'].sum() != 0 or grad_dict['cell'].sum() != 0:
+        #        print(grad_dict, diffusion_loss)
         for k in grad_dict:
             if k in score:
                 score[k] = score[k] - self.diffusion_loss_weight * grad_dict[k]
