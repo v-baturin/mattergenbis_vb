@@ -216,6 +216,7 @@ class PredictorCorrector(Generic[Diffusable]):
         with torch.set_grad_enabled(True):
             x0 = self.diffusion_module._predict_x0(
                 x=batch_,
+                atomic_numbers=self._predictors['atomic_numbers'].corruption._to_non_zero_based(torch.distributions.Categorical(logits=score["atomic_numbers"]).sample()),
                 t=t,
             )
         grad_dict = {}
@@ -303,6 +304,7 @@ class PredictorCorrector(Generic[Diffusable]):
                         # Update the score with the backward universal guidance function
                         x0 = self._diffusion_module._predict_x0(
                             x=batch,
+                            atomic_numbers=self._predictors['atomic_numbers'].corruption._to_non_zero_based(torch.distributions.Categorical(logits=score["atomic_numbers"]).sample()),
                             t=t,
                             score=score,
                             get_alpha=True
@@ -323,7 +325,7 @@ class PredictorCorrector(Generic[Diffusable]):
             if record:
                     recorded_samples.append(batch.clone().to("cpu"))
             
-            for _ in range(self.self_rec_steps-1):
+            for _ in range((self.self_rec_steps-1)*(t < self._multi_corruption.T * 0.9).all()):
                 # Compute unconditionnal score
                 batch_, mean_batch_ = _mask_replace(
                     samples_means=samples_means, batch=batch, mean_batch=mean_batch, mask=mask
@@ -375,6 +377,7 @@ class PredictorCorrector(Generic[Diffusable]):
                         # Update the score with the backward universal guidance function
                         x0 = self._diffusion_module._predict_x0(
                             x=batch,
+                            atomic_numbers=self._predictors['atomic_numbers'].corruption._to_non_zero_based(torch.distributions.Categorical(logits=score["atomic_numbers"]).sample()),
                             t=t,
                             score=score,
                             get_alpha=True

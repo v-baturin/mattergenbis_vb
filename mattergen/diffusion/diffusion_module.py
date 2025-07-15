@@ -133,14 +133,15 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
 
         return noisy_batch, t
 
-    def _predict_x0(self, x: T, t: torch.Tensor, score: T | None = None, get_alpha : bool = False) -> T:
+    def _predict_x0(self, x: T, atomic_numbers: torch.Tensor, t: torch.Tensor, score: T | None = None, get_alpha : bool = False) -> T:
         """Predict the x_0 from a batch of data at a given timestep
-
         Args:
             x: batch of data
+            atomic_numbers: atomic numbers of the predicted atoms in the batch
             t: timestep
             score: score of the batch of data at the given timestep, if None, it will be calculated (it is modified in the self-rec steps)
-
+            get_alpha: whether to return alpha values for each field
+        
         Returns:
             x_0: predicted x_0 for the batch of data at the given timestep
         """
@@ -170,7 +171,7 @@ class DiffusionModule(torch.nn.Module, Generic[T]):
         # Create a new ChemGraphBatch estimating x0 with requires_grad=True for pos and cell    
         if get_alpha:
             x0 = ChemGraphBatch(
-                atomic_numbers=x.atomic_numbers,
+                atomic_numbers=atomic_numbers,
                 num_atoms=x.num_atoms,
                 pos=x0_hat["pos"].requires_grad_(True),
                 cell=x0_hat["cell"].requires_grad_(True),
