@@ -46,6 +46,8 @@ else
     SUF="_guided_"
 fi
 
+SUF=${SUF}"env${ENV}_"
+
 if [ $G != 1.0 ]; then
     SUF=${SUF}"g${G}_"
 fi
