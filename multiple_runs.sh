@@ -88,7 +88,7 @@ for X in $(seq 1 "$MUL"); do
     echo "Duration: ${duration} seconds at $(date +%H:%M:%S)"
 done
 
-main_file="${BASE}results/${SYS}/generated_crystals${SUF}.extxyz"
+main_file="${BASE}results/${SYS}_f/generated_crystals${SUF}.extxyz"
 # Create the main file if it doesn't exist
 if [ ! -f "$main_file" ]; then
     echo "Creating main file $main_file."
