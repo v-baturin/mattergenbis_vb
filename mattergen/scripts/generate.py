@@ -31,7 +31,7 @@ def main(
     strict_checkpoint_loading: bool = True,
     target_compositions: list[dict[str, int]] | None = None,
     guidance: dict | str | None = None,
-    diffusion_loss_weight: float = 1.0 | list[float],
+    diffusion_loss_weight: float | list[float] = 1.0 ,
     print_loss: bool = False,
     self_rec_steps: int = 1,
     back_step: int = 0,
@@ -124,6 +124,9 @@ def main(
             )
         # Create the combined loss function based on the provided guidance
         loss_fn = make_combined_loss(guidance)
+    
+    if isinstance(diffusion_loss_weight, (float)):
+        diffusion_loss_weight = [diffusion_loss_weight] * 2
 
     generator = CrystalGenerator(
         checkpoint_info=checkpoint_info,

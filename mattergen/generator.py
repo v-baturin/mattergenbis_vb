@@ -201,7 +201,7 @@ class CrystalGenerator:
 
     # Loss function for universal diffusion guidance 
     diffusion_loss_fn: Callable | None = None  # NEW
-    diffusion_loss_weight: float = 1.0 | list[float]   # NEW
+    diffusion_loss_weight: list[float]   # NEW
     print_loss: bool = False # NEW
     self_rec_steps: int = 1  # NEW
     back_step: int = 0, # NEW
@@ -369,7 +369,7 @@ class CrystalGenerator:
         target_compositions_dict: list[dict[str, float]] | None = None,
         output_dir: str = "outputs",
         diffusion_loss_fn: Callable | None = None,  # NEW
-        diffusion_loss_weight: float | list[float] | None = None,         # NEW
+        diffusion_loss_weight: list[float] = [1,1],         # NEW
     ) -> list[Structure]:
         # Prioritize the runtime provided batch_size, num_batches and target_compositions_dict
         batch_size = batch_size or self.batch_size
@@ -379,9 +379,6 @@ class CrystalGenerator:
         diffusion_loss_weight = diffusion_loss_weight if diffusion_loss_weight is not None else self.diffusion_loss_weight # NEW
         assert batch_size is not None
         assert num_batches is not None
-
-        if isinstance(diffusion_loss_weight, (float)):
-            diffusion_loss_weight = [diffusion_loss_weight] * 2
 
         # print config for debugging and reproducibility
         print("\nModel config:")
