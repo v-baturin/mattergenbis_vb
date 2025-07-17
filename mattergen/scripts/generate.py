@@ -31,7 +31,7 @@ def main(
     strict_checkpoint_loading: bool = True,
     target_compositions: list[dict[str, int]] | None = None,
     guidance: dict | str | None = None,
-    diffusion_loss_weight: float = 1.0,
+    diffusion_loss_weight: float = 1.0 | list[float],
     print_loss: bool = False,
     self_rec_steps: int = 1,
     back_step: int = 0,

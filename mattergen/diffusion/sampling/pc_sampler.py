@@ -38,7 +38,7 @@ class PredictorCorrector(Generic[Diffusable]):
         eps_t: float = 1e-3,
         max_t: float | None = None,
         diffusion_loss_fn: Callable[[Diffusable, torch.Tensor], torch.Tensor] | None = None,
-        diffusion_loss_weight: float = 1.0,  # Weight for the diffusion loss (theoretically should be 1.0)
+        diffusion_loss_weight: list[float],  # Weight for the diffusion loss (theoretically should be 1.0)
         self_rec_steps: int = 1,
         back_step: int = 0,  # Number of steps to go back in the predictor-corrector loop
         print_loss_history: bool = False,  # Flag to control printing of loss history
@@ -176,7 +176,7 @@ class PredictorCorrector(Generic[Diffusable]):
     def set_diffusion_loss(
         self,
         diffusion_loss_fn: Callable[[BatchedData, torch.Tensor], torch.Tensor],
-        diffusion_loss_weight: float = 1.0,
+        diffusion_loss_weight: list[float],
     ):
         """Set or update the diffusion loss function and its weight after the module has been initialized."""
         self.diffusion_loss_fn = diffusion_loss_fn
@@ -205,7 +205,7 @@ class PredictorCorrector(Generic[Diffusable]):
             for k in grad_dict:
                 if k in score:
                     alpha_t, sigma_t = x0.alpha[k]
-                    score[k] = score[k] - alpha_t / (sigma_t**2) * grad_dict[k] # + in theory ?
+                    score[k] = score[k] - self.diffusion_loss_weight[1] * alpha_t / (sigma_t**2) * grad_dict[k] # + in theory ?
             del grad_dict  # Clean up the gradient dictionary
             pass
 
@@ -239,7 +239,7 @@ class PredictorCorrector(Generic[Diffusable]):
         #        print(grad_dict, diffusion_loss)
         for k in grad_dict:
             if k in score:
-                score[k] = score[k] - self.diffusion_loss_weight * grad_dict[k]
+                score[k] = score[k] - self.diffusion_loss_weight[0] * grad_dict[k]
         del batch_  # Clean up the temporary batch with gradients
         del grad_dict  # Clean up the gradient dictionary
         pass
