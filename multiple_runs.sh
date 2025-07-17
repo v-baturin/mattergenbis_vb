@@ -14,7 +14,8 @@ if [[ "$1" == "--help" ]]; then
     echo "  ENV  : Environment conditions for the system (default: 'Co-O':3)"
     echo "  R    : Self-recursion steps (default: 3)"
     echo "  B    : Back step (default: 2)"
-    echo "  G    : Diffusion loss weight (default: 1.0)"
+    echo "  G    : Forward Diffusion loss weight (default: 1.0)"
+    echo "  K    : Backward Diffusion loss weight (default: 1.0)"
     echo "  ALG  : Algorithm flag, True or False (default: True)"
     echo "  GPU  : GPU index to use (optional, default: None)"
     echo "  MOD  : Mode for the environment loss (default: None which means l1)"
@@ -32,11 +33,12 @@ BASE=${4:-/Data/auguste.de-lambilly/mattergenbis/}
 SYS=${5:-Li-Co-O}
 ENV=${6:-"'Co-O':3"}
 G=${7:-1.0}
-R=${8:-3}
-B=${9:-2}
-ALG=${10:-True}
-MOD=${11:-None}
-GPU=${12:-None}
+K=${8:-1.0}
+R=${9:-3}
+B=${10:-2}
+ALG=${11:-True}
+MOD=${12:-None}
+GPU=${13:-None}
 
 if [ "$ALG" == "True" ]; then
     al=2
@@ -50,6 +52,10 @@ SUF=${SUF}"env${ENV}_"
 
 if [ $G != 1.0 ]; then
     SUF=${SUF}"g${G}_"
+fi
+
+if [ $K != 1.0 ]; then
+    SUF=${SUF}"k${K}_"
 fi
 
 SUF=${SUF}"${R}-${B}"
@@ -76,7 +82,7 @@ for X in $(seq 1 "$MUL"); do
         --record_trajectories=False \
         --diffusion_guidance_factor=2.0 \
         --guidance="{'environment': {'mode':$MOD, $ENV}}" \
-        --diffusion_loss_weight=$G \
+        --diffusion_loss_weight=[$G,$K] \
         --print_loss=False \
         --self_rec_steps=$R \
         --back_step=$B \

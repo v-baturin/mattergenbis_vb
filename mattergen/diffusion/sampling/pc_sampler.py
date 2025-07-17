@@ -38,7 +38,7 @@ class PredictorCorrector(Generic[Diffusable]):
         eps_t: float = 1e-3,
         max_t: float | None = None,
         diffusion_loss_fn: Callable[[Diffusable, torch.Tensor], torch.Tensor] | None = None,
-        diffusion_loss_weight: list[float],  # Weight for the diffusion loss (theoretically should be 1.0)
+        diffusion_loss_weight: list[float] = [1.0,1.0],  # Weight for the diffusion loss (theoretically should be 1.0)
         self_rec_steps: int = 1,
         back_step: int = 0,  # Number of steps to go back in the predictor-corrector loop
         print_loss_history: bool = False,  # Flag to control printing of loss history

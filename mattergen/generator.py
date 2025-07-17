@@ -3,7 +3,7 @@
 
 import io
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from zipfile import ZipFile
 from typing import Callable
@@ -201,7 +201,7 @@ class CrystalGenerator:
 
     # Loss function for universal diffusion guidance 
     diffusion_loss_fn: Callable | None = None  # NEW
-    diffusion_loss_weight: list[float]   # NEW
+    diffusion_loss_weight: list[float] = field(default_factory=lambda: [1.0, 2.0])  # NEW
     print_loss: bool = False # NEW
     self_rec_steps: int = 1  # NEW
     back_step: int = 0, # NEW
@@ -369,7 +369,7 @@ class CrystalGenerator:
         target_compositions_dict: list[dict[str, float]] | None = None,
         output_dir: str = "outputs",
         diffusion_loss_fn: Callable | None = None,  # NEW
-        diffusion_loss_weight: list[float] = [1,1],         # NEW
+        diffusion_loss_weight: list[float] | None = None,         # NEW
     ) -> list[Structure]:
         # Prioritize the runtime provided batch_size, num_batches and target_compositions_dict
         batch_size = batch_size or self.batch_size
