@@ -5,7 +5,7 @@ from mattergen.common.data.chemgraph import ChemGraph
 from pymatgen.core import Element, Composition
 from pymatgen.analysis.phase_diagram import PhaseDiagram, PDEntry
 import pandas as pd
-from mattersim.datasets.utils.convertor import ChemGraphBatchConvertor
+#from mattersim.datasets.utils.convertor import ChemGraphBatchConvertor
 from mattersim.forcefield.m3gnet.m3gnet import M3Gnet
 from ase import Atoms
 from ase.data import chemical_symbols
