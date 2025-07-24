@@ -90,7 +90,7 @@ for X in $(seq 1 "$MUL"); do
         --force_gpu=$GPU >> $LOG 2>&1
     end_time=$(date +%s)
     duration=$((end_time - start_time))
-    echo "Generated samples for Li-Co-O with environment Co-O:3 at step $X"
+    echo "Generated samples for $SYS with environment $ENV at step $X"
     echo "Duration: ${duration} seconds at $(date +%H:%M:%S)"
 done
 
