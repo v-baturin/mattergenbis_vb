@@ -16,12 +16,13 @@ if [[ "$1" == "--help" ]]; then
     echo "  B    : Back step (default: 2)"
     echo "  G    : Forward Diffusion loss weight (default: 1.0)"
     echo "  K    : Backward Diffusion loss weight (default: 1.0)"
+    echo "  Norm : Normalize the diffusion loss (default: True)"
     echo "  ALG  : Algorithm flag, True or False (default: True)"
     echo "  GPU  : GPU index to use (optional, default: None)"
     echo "  MOD  : Mode for the environment loss (default: None which means l1)"
     echo ""
     echo "Example:"
-    echo "  ./multiple_runs.sh 20 log.txt 50 /Data/auguste.de-lambilly/mattergenbis/ Li-Co-O "'Co-O':3" 1.0 3 2 True 0 huber"
+    echo "  ./multiple_runs.sh 20 log.txt 50 /Data/auguste.de-lambilly/mattergenbis/ Li-Co-O "'Co-O':3" 1.0 0.01 True 3 2 True 0 huber"
     exit 0
 fi
 
@@ -34,11 +35,12 @@ SYS=${5:-Li-Co-O}
 ENV=${6:-"'Co-O':3"}
 G=${7:-1.0}
 K=${8:-1.0}
-R=${9:-3}
-B=${10:-2}
-ALG=${11:-True}
-MOD=${12:-None}
-GPU=${13:-None}
+Norm=${9:-True}
+R=${10:-3}
+B=${11:-2}
+ALG=${12:-True}
+MOD=${13:-None}
+GPU=${14:-None}
 
 if [ "$ALG" == "True" ]; then
     al=2
@@ -82,7 +84,7 @@ for X in $(seq 1 "$MUL"); do
         --record_trajectories=False \
         --diffusion_guidance_factor=2.0 \
         --guidance="{'environment': {'mode':$MOD, $ENV}}" \
-        --diffusion_loss_weight=[$G,$K] \
+        --diffusion_loss_weight=[$G,$K,] \
         --print_loss=False \
         --self_rec_steps=$R \
         --back_step=$B \
