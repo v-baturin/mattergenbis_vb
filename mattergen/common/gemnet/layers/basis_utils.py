@@ -7,6 +7,7 @@ Adapted from https://github.com/FAIR-Chem/fairchem/blob/main/src/fairchem/core/m
 
 from typing import Any, List
 
+import math
 import numpy as np
 import sympy as sym
 from scipy import special as sp
@@ -106,8 +107,8 @@ def sph_harm_prefactor(l_degree: int, m_order: int) -> float:
     return (
         (2 * l_degree + 1)
         / (4 * np.pi)
-        * np.math.factorial(l_degree - abs(m_order))
-        / np.math.factorial(l_degree + abs(m_order))
+        * math.factorial(l_degree - abs(m_order))
+        / math.factorial(l_degree + abs(m_order))
     ) ** 0.5
 
 

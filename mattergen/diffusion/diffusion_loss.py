@@ -5,7 +5,7 @@ from mattergen.common.data.chemgraph import ChemGraph
 from pymatgen.core import Element, Composition
 from pymatgen.analysis.phase_diagram import PhaseDiagram, PDEntry
 import pandas as pd
-#from mattersim.datasets.utils.convertor import ChemGraphBatchConvertor
+from mattersim.datasets.utils.convertor import ChemGraphBatchConvertor
 from mattersim.forcefield.m3gnet.m3gnet import M3Gnet
 from ase import Atoms
 from ase.data import chemical_symbols
@@ -289,7 +289,7 @@ def composition(num, pos):
     """
     return num[num != 101], pos[num != 101]
 
-def energy_hull(x, t, target=None):
+def energy(x, t, target=None):
     """
     Computes the energy above the hull for a given composition and energy.
     x is a chemgraph batch
@@ -309,11 +309,20 @@ def energy_hull(x, t, target=None):
         raise ValueError("x must be a ChemGraph object")
 
     inputs = converter.convert(x)
-    e_hull = []
+    energies = []
     for input in inputs:
-        with torch.no_grad():
-            e_hull.append(model(input))
-    return e_hull
+        if input is None:
+            # If no atoms, append 0 to results
+            energies.append(torch.tensor(0 * x.pos.sum() * x.cell.sum(),device = x.pos.device))
+        else:
+            temp = model(input)
+            if temp.isnan().any():
+                # If NaN, append 0 to results
+                energies.append(torch.tensor(0 * x.pos.sum() * x.cell.sum(),device = x.pos.device))
+            else:
+                energies.append(model(input))  # Otherwise compute the energy estimate
+    energies = torch.stack(energies)  # Stack the energies into a tensor
+    return energies
 
 def _energy_hull(x):
     """
@@ -366,7 +375,7 @@ LOSS_REGISTRY: Dict[str, Callable[..., torch.Tensor]] = {
     "l1_distance": l1_distance_loss,
     "volume": volume_loss,
     "environment": environment_loss,
-    "energy_hull": energy_hull,
+    "energy": energy,
     "new_loss": new_loss,  # Placeholder for a new loss function
     # Add more loss functions as needed
 }
