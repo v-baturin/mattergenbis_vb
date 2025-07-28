@@ -181,6 +181,8 @@ class PredictorCorrector(Generic[Diffusable]):
         """Set or update the diffusion loss function and its weight after the module has been initialized."""
         self.diffusion_loss_fn = diffusion_loss_fn
         self.diffusion_loss_weight = diffusion_loss_weight
+        if len(self.diffusion_loss_weight) == 2:
+            self.diffusion_loss_weight.append(True)  # If not mentionned, use the normalization
 
     def _backward_guidance(self, x0: Diffusable, t: torch.Tensor, score) -> Diffusable:
             """Update the score with the backward universal guidance function."""
@@ -203,9 +205,9 @@ class PredictorCorrector(Generic[Diffusable]):
             #if grad_dict['pos'].sum() != 0 or grad_dict['cell'].sum() != 0:
             #   print(grad_dict, diffusion_loss)
             for k in grad_dict:
-                if k in score:
+                if k in score and grad_dict[k].norm()>0:
                     alpha_t, sigma_t = x0.alpha[k]
-                    score[k] = score[k] - self.diffusion_loss_weight[1] * alpha_t / (sigma_t**2) * grad_dict[k] # + in theory ?
+                    score[k] = score[k] - self.diffusion_loss_weight[1] * alpha_t / (sigma_t**2) * (score[k].norm()/grad_dict[k].norm if self.diffusion_loss_weight[2] else 1) * grad_dict[k] # + in theory ?
             del grad_dict  # Clean up the gradient dictionary
             pass
 
@@ -238,8 +240,8 @@ class PredictorCorrector(Generic[Diffusable]):
         #if grad_dict['pos'].sum() != 0 or grad_dict['cell'].sum() != 0:
         #        print(grad_dict, diffusion_loss)
         for k in grad_dict:
-            if k in score:
-                score[k] = score[k] - self.diffusion_loss_weight[0] * grad_dict[k]
+            if k in score and grad_dict[k].norm()>0:
+                score[k] = score[k] - self.diffusion_loss_weight[0] * (score[k].norm()/grad_dict[k].norm if self.diffusion_loss_weight[2] else 1) * grad_dict[k]
         del batch_  # Clean up the temporary batch with gradients
         del grad_dict  # Clean up the gradient dictionary
         pass
