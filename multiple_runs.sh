@@ -60,7 +60,7 @@ if [ $K != 1.0 ]; then
     SUF=${SUF}"k${K}_"
 fi
 
-SUF=${SUF}"${R}-${B}"
+SUF=${SUF}"_${Norm}_${R}-${B}"
 
 if [ "$MOD" != "None" ]; then
     SUF=${SUF}"_${MOD}"
@@ -84,7 +84,7 @@ for X in $(seq 1 "$MUL"); do
         --record_trajectories=False \
         --diffusion_guidance_factor=2.0 \
         --guidance="{'environment': {'mode':$MOD, $ENV}}" \
-        --diffusion_loss_weight=[$G,$K,] \
+        --diffusion_loss_weight=[$G,$K,$Norm] \
         --print_loss=False \
         --self_rec_steps=$R \
         --back_step=$B \

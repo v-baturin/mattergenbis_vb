@@ -313,14 +313,14 @@ def energy(x, t, target=None):
     for input in inputs:
         if input is None:
             # If no atoms, append 0 to results
-            energies.append(torch.tensor(0 * x.pos.sum() * x.cell.sum(),device = x.pos.device))
+            energies.append(torch.zeros(1, device=x.pos.device) * x.pos.sum() * x.cell.sum())
         else:
             temp = model(input)
             if temp.isnan().any():
                 # If NaN, append 0 to results
-                energies.append(torch.tensor(0 * x.pos.sum() * x.cell.sum(),device = x.pos.device))
+                energies.append(torch.zeros(1, device=x.pos.device) * x.pos.sum() * x.cell.sum())
             else:
-                energies.append(model(input))  # Otherwise compute the energy estimate
+                energies.append(temp)  # Otherwise compute the energy estimate
     energies = torch.stack(energies)  # Stack the energies into a tensor
     return energies
 
