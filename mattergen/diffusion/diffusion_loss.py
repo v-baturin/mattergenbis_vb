@@ -10,13 +10,6 @@ from mattersim.forcefield.m3gnet.m3gnet import M3Gnet
 from ase import Atoms
 from ase.data import chemical_symbols
 
-def l2_distance_loss(x, t, target):
-    # Example: x and target are tensors of the same shape
-    return torch.nn.functional.mse_loss(x, target)
-
-def l1_distance_loss(x, t, target):
-    return torch.nn.functional.l1_loss(x, target)
-
 def volume(x, t):
     """
     Batched volume loss: computes the absolute difference between each actual volume and the target.
@@ -347,7 +340,9 @@ def new_loss(x, t, target):
     Example of a new loss function.
     This is just a placeholder and should be replaced with an actual implementation.
     """
-    # Assuming x and target are tensors of the same shape
+    # x : ChemGraph object
+    # t : timestep
+    # target : target value
     pass
 
 def make_combined_loss(guidance_dict: dict) -> callable:
@@ -371,8 +366,6 @@ def make_combined_loss(guidance_dict: dict) -> callable:
     return combined_loss
 
 LOSS_REGISTRY: Dict[str, Callable[..., torch.Tensor]] = {
-    "l2_distance": l2_distance_loss,
-    "l1_distance": l1_distance_loss,
     "volume": volume_loss,
     "environment": environment_loss,
     "energy": energy,
