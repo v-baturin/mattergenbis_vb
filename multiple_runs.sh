@@ -60,7 +60,7 @@ if [ $K != 1.0 ]; then
     SUF=${SUF}"k${K}_"
 fi
 
-SUF=${SUF}"_${Norm}_${R}-${B}"
+SUF=${SUF}"${Norm}_${R}-${B}"
 
 if [ "$MOD" != "None" ]; then
     SUF=${SUF}"_${MOD}"
