@@ -34,8 +34,8 @@ mattergen-generate "results/Li-Co-O_guided_env" \
 | `batch_size`                                                         | `int`                  | Number of structures per batch                                                    |
 | `num_batches`                                                        | `int`                  | Number of batches to generate                                                     |
 | `properties_to_condition_on`                                         | `dict`                 | Conditioning properties when a finetuned model has been chosen, like `{'chemical_system':'Li-Co-O'}`                     |
-| `diffusion_guidance_factor`                                          | `float`                | Strength of guidance correction applied to the classifier-free diffusion when a finetuned model has been chosen                             |
-| `guidance`                                                           | `dict`                 | Dictionary defining the training-free guidance                                       |
+| `diffusion_guidance_factor`                                          | `float`                | Strength of guidance correction applied to the classifier-free diffusion when a finetuned model has been chosen  (choice for guidance : `2.0`)                           |
+| `guidance`                                                           | `dict`                 | Dictionary defining the training-free guidance  (see below)                                     |
 | `diffusion_loss_weight`                                              | `[float, float, bool]` | `[g, k, normalize]` where:                                                        |
 | └─ `g`: weight of forward guidance                                   |                        |                                                                                   |
 | └─ `k`: weight of backward guidance                                  |                        |                                                                                   |
@@ -59,12 +59,14 @@ You can guide generation using one or more objectives. Each is passed via the `-
 --guidance="{'environment': {
   'mode': 'huber',
   'Cu-P': [4, 2.6],
-  'Cu-Cu': [0, 2.9]
+  'Cu-Cu': [0, 2.9],
+  'Cu-S': 1
 }}"
 ```
 
 - `mode`: can be `l1`, `l2`, or `huber`
-- `Cu-P`: `[target_coordination, cutoff_radius]`
+- `A-B`: `[target_coordination, cutoff_radius]` 
+- `A-B`: `int` in this case the cutoff radius used is the sum of the covalence radius
 - Multiple atom-pair environments may be defined.
 
 ### ⚛️ Energy Objective
@@ -107,9 +109,10 @@ def new_loss(x, t, target):
     Example of a new loss function.
     This is just a placeholder and should be replaced with an actual implementation.
     """
-    # x : ChemGraph object
+    # x : ChemGraph object (ChemGraphBatch usually)
     # t : timestep
     # target : target value
+    # Return : torch.tensor with the same size as the batch
     pass
 ```
 
