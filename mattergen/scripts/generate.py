@@ -156,9 +156,9 @@ def main(
 
 def _main():
     # use fire instead of argparse to allow for the specification of dictionary values via the CLI
-    fire.Fire(main)
+    #fire.Fire(main)
     #this line is for debugging purposes, to run the script directly
-    #fire.Fire(main, command='"results/Li-Co-O_test1"   --pretrained-name=chemical_system   --batch_size=2   --properties_to_condition_on="{\'chemical_system\':\'Li-Co-O\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0  --guidance="{\'energy\': 0 }" --diffusion_loss_weight=[0.01,0.01,True]   --print_loss=False --self_rec_steps=3 --back_step=2 --algo=False' )
+    fire.Fire(main, command='"results/Li-Co-O_test"   --pretrained-name=chemical_system   --batch_size=2   --properties_to_condition_on="{\'chemical_system\':\'Li-Co-O\'}"   --record_trajectories=False   --diffusion_guidance_factor=2.0  --guidance="{\'environment\': {\'mode\':huber, \'Co-O\':6}}" --diffusion_loss_weight=[0.01,0.01,True]   --print_loss=False --self_rec_steps=3 --back_step=2 --algo=False' )
 
 if __name__ == "__main__":
     _main()
