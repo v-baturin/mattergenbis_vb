@@ -3,7 +3,7 @@
 
 if [[ "$1" == "--help" ]]; then
     echo "Usage:"
-    echo "  ./multiple_runs.sh NB LOG MUL BASE SYS ENV G R B ALG [GPU] [MOD]"
+    echo "  ./multiple_runs.sh NB LOG MUL BASE SYS ENV G K Norm R B ALG MOD GPU"
     echo ""
     echo "Arguments:"
     echo "  NB   : Number of samples per run (default: 20)"
@@ -22,7 +22,7 @@ if [[ "$1" == "--help" ]]; then
     echo "  MOD  : Mode for the environment loss (default: None which means l1)"
     echo ""
     echo "Example:"
-    echo "  ./multiple_runs.sh 20 log.txt 50 /Data/auguste.de-lambilly/mattergenbis/ Li-Co-O "'Co-O':3" 1.0 0.01 True 3 2 True 0 huber"
+    echo " bash multiple_runs.sh 20 log.txt 50 /Data/auguste.de-lambilly/mattergenbis/ Li-Co-O "'Co-O':6" 0.0001 0.0001 True 3 2 False huber 0"
     exit 0
 fi
 
@@ -50,7 +50,10 @@ else
     SUF="_guided_"
 fi
 
-SUF=${SUF}"env${ENV}_"
+clean_env="${ENV//\'/}"    # Remove all single quotes
+clean_env="${clean_env//:/}" 
+
+SUF=${SUF}"env${clean_env}_"
 
 if [ $G != 1.0 ]; then
     SUF=${SUF}"g${G}_"
@@ -77,19 +80,27 @@ echo "" > $LOG
 for X in $(seq 1 "$MUL"); do
     echo "Generating $NB samples for $SYS into ${DIR}${X} at $(date +%H:%M:%S)"
     start_time=$(date +%s)
-    mattergen-generate "$DIR${X}" \
-        --pretrained-name=chemical_system \
-        --batch_size=$NB \
-        --properties_to_condition_on="{'chemical_system':'${SYS}'}" \
-        --record_trajectories=False \
-        --diffusion_guidance_factor=2.0 \
-        --guidance="{'environment': {'mode':$MOD, $ENV}}" \
-        --diffusion_loss_weight=[$G,$K,$Norm] \
-        --print_loss=False \
-        --self_rec_steps=$R \
-        --back_step=$B \
-        --algo=$ALG \
-        --force_gpu=$GPU >> $LOG 2>&1
+    while true; do
+        mattergen-generate "$DIR${X}" \
+            --pretrained-name=chemical_system \
+            --batch_size=$NB \
+            --properties_to_condition_on="{'chemical_system':'${SYS}'}" \
+            --record_trajectories=False \
+            --diffusion_guidance_factor=2.0 \
+            --guidance="{'environment': {'mode':$MOD, $ENV}}" \
+            --diffusion_loss_weight=[$G,$K,$Norm] \
+            --print_loss=False \
+            --self_rec_steps=$R \
+            --back_step=$B \
+            --algo=$ALG \
+            --force_gpu=$GPU >> $LOG 2>&1
+        if tail -n 3 $LOG | grep "torch\.cuda\.OutOfMemoryError"; then
+            echo "CUDA Out of memory error, waiting 60 seconds before retrying..."
+            sleep 60
+        else
+            break
+        fi
+    done
     end_time=$(date +%s)
     duration=$((end_time - start_time))
     echo "Generated samples for $SYS with environment $ENV at step $X"
@@ -97,6 +108,7 @@ for X in $(seq 1 "$MUL"); do
 done
 
 main_file="${BASE}results/${SYS}_f/generated_crystals${SUF}.extxyz"
+hard_save="/users/eleves-b/2021/auguste.de-lambilly/results/${SYS}_f/generated_crystals${SUF}.extxyz"
 # Create the main file if it doesn't exist
 if [ ! -f "$main_file" ]; then
     echo "Creating main file $main_file."
@@ -106,10 +118,19 @@ if [ ! -f "$main_file" ]; then
     touch "$main_file"
 fi
 
+if [ ! -f "$hard_save" ]; then
+    echo "Creating main file $hard_save."
+    if [ ! -d "$(dirname "$hard_save")" ]; then
+        mkdir -p "$(dirname "$hard_save")"
+    fi
+    touch "$hard_save"
+fi
+
 for X in $(seq 1 "$MUL"); do
     src="${BASE}${DIR}${X}/generated_crystals.extxyz"
     if [ -f "$src" ]; then
         cat "$src" >> "$main_file"
+        cat "$src" >> "$hard_save"
     else
         echo "Warning: $src does not exist, skipping."
     fi
