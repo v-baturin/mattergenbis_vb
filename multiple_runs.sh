@@ -108,7 +108,7 @@ for X in $(seq 1 "$MUL"); do
 done
 
 main_file="${BASE}results/${SYS}_f/generated_crystals${SUF}.extxyz"
-hard_save="/users/eleves-b/2021/auguste.de-lambilly/results//${SYS}_f/generated_crystals${SUF}.extxyz"
+hard_save="/users/eleves-b/2021/auguste.de-lambilly/results/${SYS}_f/generated_crystals${SUF}.extxyz"
 # Create the main file if it doesn't exist
 if [ ! -f "$main_file" ]; then
     echo "Creating main file $main_file."
