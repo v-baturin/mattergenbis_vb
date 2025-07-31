@@ -108,6 +108,7 @@ for X in $(seq 1 "$MUL"); do
 done
 
 main_file="${BASE}results/${SYS}_f/generated_crystals${SUF}.extxyz"
+hard_save="/users/eleves-b/2021/auguste.de-lambilly/results//${SYS}_f/generated_crystals${SUF}.extxyz"
 # Create the main file if it doesn't exist
 if [ ! -f "$main_file" ]; then
     echo "Creating main file $main_file."
@@ -117,10 +118,19 @@ if [ ! -f "$main_file" ]; then
     touch "$main_file"
 fi
 
+if [ ! -f "$hard_save" ]; then
+    echo "Creating main file $hard_save."
+    if [ ! -d "$(dirname "$hard_save")" ]; then
+        mkdir -p "$(dirname "$hard_save")"
+    fi
+    touch "$hard_save"
+fi
+
 for X in $(seq 1 "$MUL"); do
     src="${BASE}${DIR}${X}/generated_crystals.extxyz"
     if [ -f "$src" ]; then
         cat "$src" >> "$main_file"
+        cat "$src" >> "$hard_save"
     else
         echo "Warning: $src does not exist, skipping."
     fi
