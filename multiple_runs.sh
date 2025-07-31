@@ -80,19 +80,27 @@ echo "" > $LOG
 for X in $(seq 1 "$MUL"); do
     echo "Generating $NB samples for $SYS into ${DIR}${X} at $(date +%H:%M:%S)"
     start_time=$(date +%s)
-    mattergen-generate "$DIR${X}" \
-        --pretrained-name=chemical_system \
-        --batch_size=$NB \
-        --properties_to_condition_on="{'chemical_system':'${SYS}'}" \
-        --record_trajectories=False \
-        --diffusion_guidance_factor=2.0 \
-        --guidance="{'environment': {'mode':$MOD, $ENV}}" \
-        --diffusion_loss_weight=[$G,$K,$Norm] \
-        --print_loss=False \
-        --self_rec_steps=$R \
-        --back_step=$B \
-        --algo=$ALG \
-        --force_gpu=$GPU >> $LOG 2>&1
+    while true; do
+        mattergen-generate "$DIR${X}" \
+            --pretrained-name=chemical_system \
+            --batch_size=$NB \
+            --properties_to_condition_on="{'chemical_system':'${SYS}'}" \
+            --record_trajectories=False \
+            --diffusion_guidance_factor=2.0 \
+            --guidance="{'environment': {'mode':$MOD, $ENV}}" \
+            --diffusion_loss_weight=[$G,$K,$Norm] \
+            --print_loss=False \
+            --self_rec_steps=$R \
+            --back_step=$B \
+            --algo=$ALG \
+            --force_gpu=$GPU >> $LOG 2>&1
+        if tail -n 3 $LOG | grep "torch\.cuda\.OutOfMemoryError"; then
+            echo "CUDA Out of memory error, waiting 60 seconds before retrying..."
+            sleep 60
+        else
+            break
+        fi
+    done
     end_time=$(date +%s)
     duration=$((end_time - start_time))
     echo "Generated samples for $SYS with environment $ENV at step $X"
