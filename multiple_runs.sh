@@ -50,7 +50,10 @@ else
     SUF="_guided_"
 fi
 
-SUF=${SUF}"env${ENV}_"
+clean_env="${ENV//\'/}"    # Remove all single quotes
+clean_env="${clean_env//:/}" 
+
+SUF=${SUF}"env${clean_env}_"
 
 if [ $G != 1.0 ]; then
     SUF=${SUF}"g${G}_"
