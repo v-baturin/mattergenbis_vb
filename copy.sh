@@ -21,6 +21,8 @@ SYS=${3:Li-Co-O}
 SUF=${4:-_guided_env3_3-2}
 
 main_file="${BASE}results/${SYS}_f/generated_crystals${SUF}.extxyz"
+hard_save="/users/eleves-b/2021/auguste.de-lambilly/results/${SYS}_f/generated_crystals${SUF}.extxyz"
+
 if [ ! -f "$main_file" ]; then
     echo "Creating main file $main_file."
     if [ ! -d "$(dirname "$main_file")" ]; then
@@ -28,6 +30,15 @@ if [ ! -f "$main_file" ]; then
     fi
     touch "$main_file"
 fi
+
+if [ ! -f "$hard_save" ]; then
+    echo "Creating hard save file $hard_save."
+    if [ ! -d "$(dirname "$hard_save")" ]; then
+        mkdir -p "$(dirname "$hard_save")"
+    fi
+    touch "$hard_save"
+fi
+
 DIR="results/${SYS}${SUF}_"
 
 for X in $(seq 1 "$MUL"); do
