@@ -45,6 +45,7 @@ for X in $(seq 1 "$MUL"); do
     src="${BASE}${DIR}${X}/generated_crystals.extxyz"
     if [ -f "$src" ]; then
         cat "$src" >> "$main_file"
+        cat "$src" >> "$hard_save"
     else
         echo "Warning: $src does not exist, skipping."
     fi
