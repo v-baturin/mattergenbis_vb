@@ -207,7 +207,7 @@ class PredictorCorrector(Generic[Diffusable]):
             for k in grad_dict:
                 if k in score and grad_dict[k].norm()>1e-20:  # Avoid too small gradients
                     alpha_t, sigma_t = x0.alpha[k]
-                    score[k] = score[k] - self.diffusion_loss_weight[1] * alpha_t / (sigma_t**2) * (score[k].norm()/grad_dict[k].norm() if self.diffusion_loss_weight[2] else 1) * grad_dict[k] # + in theory ?
+                    score[k] = score[k] - self.diffusion_loss_weight[1] * alpha_t / (sigma_t**2) * (1/grad_dict[k].norm() if self.diffusion_loss_weight[2] else 1) * grad_dict[k] # + in theory ?
             del grad_dict  # Clean up the gradient dictionary
             pass
 
@@ -241,7 +241,7 @@ class PredictorCorrector(Generic[Diffusable]):
         #        print(grad_dict, diffusion_loss)
         for k in grad_dict:
             if k in score and grad_dict[k].norm()>1e-20:
-                score[k] = score[k] - self.diffusion_loss_weight[0] * (score[k].norm()/grad_dict[k].norm() if self.diffusion_loss_weight[2] else 1) * grad_dict[k]
+                score[k] = score[k] - self.diffusion_loss_weight[0] * (1/grad_dict[k].norm() if self.diffusion_loss_weight[2] else 1) * grad_dict[k]
         del batch_  # Clean up the temporary batch with gradients
         del grad_dict  # Clean up the gradient dictionary
         pass
