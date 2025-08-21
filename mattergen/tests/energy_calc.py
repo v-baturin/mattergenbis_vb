@@ -15,7 +15,7 @@ base_dir = "/users/eleves-b/2021/auguste.de-lambilly/results/Li-Co-O_f"
 extxyz_files = glob.glob(os.path.join(base_dir, "generated_crystals*.extxyz"), recursive=True)
 
 # Initialize MatterSimCalculator
-calculator = MatterSimCalculator(device=device)
+calculator = MatterSimCalculator(device=device, load_path="/Data/auguste.de-lambilly/mattersim_torch/pretrained_models/mattersim-v1.0.0-5M.pth")
 
 for extxyz_file in extxyz_files:
     logger.info(f"Processing file: {extxyz_file}")
