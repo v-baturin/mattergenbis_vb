@@ -71,6 +71,8 @@ DIR="results/${SYS}${SUF}_"
 
 echo "" > $LOG
 
+durations="${SUF}"  # Initialize durations variable
+
 for X in $(seq 1 "$MUL"); do
     echo "Generating $NB samples for $SYS into ${DIR}${X} at $(date +%H:%M:%S)"
     start_time=$(date +%s)
@@ -97,12 +99,15 @@ for X in $(seq 1 "$MUL"); do
     done
     end_time=$(date +%s)
     duration=$((end_time - start_time))
+    durations+=", $duration"  # Append duration to durations variable
     echo "Generated samples for $SYS with environment $ENV at step $X"
     echo "Duration: ${duration} seconds at $(date +%H:%M:%S)"
 done
 
 main_file="${BASE}results/${SYS}_f/generated_crystals${SUF}.extxyz"
 hard_save="/users/eleves-b/2021/auguste.de-lambilly/results/${SYS}_f/generated_crystals${SUF}.extxyz"
+
+
 # Create the main file if it doesn't exist
 if [ ! -f "$main_file" ]; then
     echo "Creating main file $main_file."
@@ -119,6 +124,10 @@ if [ ! -f "$hard_save" ]; then
     fi
     touch "$hard_save"
 fi
+
+# Save durations to durations.txt
+durations_file="$(dirname "$hard_save")/durations.txt"
+echo "$durations" >> "$durations_file"
 
 for X in $(seq 1 "$MUL"); do
     src="${BASE}${DIR}${X}/generated_crystals.extxyz"
