@@ -36,7 +36,7 @@ def main(
     self_rec_steps: int = 1,
     back_step: int = 0,
     gpu_memory_gb: float | None = None,
-    algo: bool = False,
+    algo: int = 0,
     force_gpu: int | None = None,
 ):
     """
@@ -61,7 +61,7 @@ def main(
         self_rec_steps: Number of self-recurrence steps to perform during generation. (default: 1)
         back_step: Number of steps of backward updates to do during generation. (default: 0)
         gpu_memory_gb: Amount of GPU memory in GB to use for the generation. (default: batch_size * 0,336)
-        algo: Algorithm to use for the generation. Algorithm 1 (False) does the correction outside the self recurrence loop, and Algorithm 2 (True) does it inside. (default: False)
+        algo: Algorithm to use for the generation. Algorithm 0 does the correction outside the self recurrence loop, Algorithm 1 does it inside before the forward corruption, and Algorithm 2 does it inside after the forward corruption.
 
     NOTE: When specifying dictionary values via the CLI, make sure there is no whitespace between the key and value, e.g., `--properties_to_condition_on={key1:value1}`.
     """

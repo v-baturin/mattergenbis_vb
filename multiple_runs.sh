@@ -17,7 +17,7 @@ if [[ "$1" == "--help" ]]; then
     echo "  G    : Forward Diffusion loss weight (default: 1.0)"
     echo "  K    : Backward Diffusion loss weight (default: 1.0)"
     echo "  Norm : Normalize the diffusion loss (default: True)"
-    echo "  ALG  : Algorithm flag, True or False (default: True)"
+    echo "  ALG  : Algorithm flag, number of the algorithm (default: 0)"
     echo "  GPU  : GPU index to use (optional, default: None)"
     echo "  MOD  : Mode for the environment loss (default: None which means l1)"
     echo ""
@@ -38,17 +38,11 @@ K=${8:-1.0}
 Norm=${9:-True}
 R=${10:-3}
 B=${11:-2}
-ALG=${12:-True}
+ALG=${12:-0}
 MOD=${13:-None}
 GPU=${14:-None}
 
-if [ "$ALG" == "True" ]; then
-    al=2
-    SUF="_guided2_" 
-else
-    al=1
-    SUF="_guided_"
-fi
+SUF="_guided-${ALG}_"
 
 clean_env="${ENV//\'/}"    # Remove all single quotes
 clean_env="${clean_env//:/}" 

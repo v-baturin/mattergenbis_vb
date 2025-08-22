@@ -42,7 +42,7 @@ class PredictorCorrector(Generic[Diffusable]):
         self_rec_steps: int = 1,
         back_step: int = 0,  # Number of steps to go back in the predictor-corrector loop
         print_loss_history: bool = False,  # Flag to control printing of loss history
-        algo: bool = False,  # Algorithm type
+        algo: int = 0,  # Algorithm type
     ):
         """
         Args:
@@ -280,7 +280,7 @@ class PredictorCorrector(Generic[Diffusable]):
 
             
             # Corrector updates.
-            if self._correctors:
+            if self._correctors and self.algo < 3:
                 for _ in range(self._n_steps_corrector):
                     score = self._score_fn(batch, t)
                     fns = {
@@ -334,9 +334,9 @@ class PredictorCorrector(Generic[Diffusable]):
                     samples_means=samples_means, batch=batch, mean_batch=mean_batch, mask=mask
                 ) #z_t-1
 
-                ############## Algorithm 3 ############
+                ############## Algorithm 1 ############
                 # Corrector updates.
-                if self._correctors and self.algo:
+                if self._correctors and self.algo == 1:
                     for _ in range(self._n_steps_corrector):
                         score = self._score_fn(batch_, t)
                         fns = {
@@ -354,7 +354,7 @@ class PredictorCorrector(Generic[Diffusable]):
                         batch_, mean_batch_ = _mask_replace(
                             samples_means=samples_means, batch=batch_, mean_batch=mean_batch_, mask=mask
                         )
-                ############## Algorithm 3 ############
+                ############## Algorithm 1 ############
                 
                 # Renoise the batch fieldwise
                 fns = {
@@ -374,8 +374,7 @@ class PredictorCorrector(Generic[Diffusable]):
 
                 ############## Algorithm 2 ############
                 # Corrector updates.
-                """
-                if self._correctors and self.algo:
+                if self._correctors and self.algo == 2:
                     for _ in range(self._n_steps_corrector):
                         score = self._score_fn(batch, t)
                         fns = {
@@ -393,7 +392,7 @@ class PredictorCorrector(Generic[Diffusable]):
                         batch, mean_batch = _mask_replace(
                             samples_means=samples_means, batch=batch, mean_batch=mean_batch, mask=mask
                         )
-                """
+
                 ############## Algorithm 2 ############
 
                 score = self._score_fn(batch, t)

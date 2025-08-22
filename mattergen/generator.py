@@ -44,7 +44,7 @@ def draw_samples_from_sampler(
     print_loss: bool = False,  # NEW
     self_rec_steps: int = 1,  # NEW
     back_step: int = 0,  # NEW
-    algo: bool = False,  # NEW
+    algo: int = 0,  # NEW
 ) -> list[Structure]:
 
     # Dict
@@ -205,8 +205,8 @@ class CrystalGenerator:
     print_loss: bool = False # NEW
     self_rec_steps: int = 1  # NEW
     back_step: int = 0, # NEW
-    algo: bool = False  # NEW
-   
+    algo: int = 0  # NEW
+
 
     # Additional overrides, only has an effect when using a diffusion-codebase model
     sampling_config_overrides: list[str] | None = None
