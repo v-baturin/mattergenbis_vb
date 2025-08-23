@@ -1,4 +1,3 @@
-
 if [[ "$1" == "--help" ]]; then
     echo "Usage:"
     echo "  ./copy.sh MUL BASE DIR"
@@ -38,6 +37,19 @@ if [ ! -f "$hard_save" ]; then
     fi
     touch "$hard_save"
 fi
+
+# Extract durations from log_multiple.txt
+if [ -f "log_multiple.txt" ]; then
+    durations="$SUF, "$(grep "Duration" log_multiple.txt | awk '{print $2}' | paste -sd "," -)
+else
+    echo "Warning: log_multiple.txt not found. Durations will be empty."
+    durations="$SUF"
+fi
+
+# Save durations to durations.txt
+durations_file="$(dirname "$hard_save")/durations.txt"
+echo "$durations" >> "$durations_file"
+
 
 DIR="results/${SYS}${SUF}_"
 
