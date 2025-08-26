@@ -43,7 +43,7 @@ mattergen-generate "results/Li-Co-O_guided_env" \
 | `print_loss`                                                         | `bool`                 | Save loss values during generation                                               |
 | `self_rec_steps`                                                     | `int`                  | Number of self-recurrence steps                                                   |
 | `back_step`                                                          | `int`                  | Number of backward guidance steps per backward guidance                                      |
-| `algo`                                                               | `bool`                 | `False` (Algo 1) = outer-loop correction; `True` (Algo 2) = inner-loop correction |
+| `algo`                                                               | `int`                 | `0` (Algo 2) = outer-loop correction; `1` (Algo 1) = inner-loop correction before forward pass; `2` (Algo 3) = inner-loop correction after forward pass |
 | `record_trajectories`                                                | `bool`                 | Whether to record step-wise atomic positions                                      |
 | `force_gpu`                                                          | `int`                  | Force use of specific GPU ID                                                      |
 
