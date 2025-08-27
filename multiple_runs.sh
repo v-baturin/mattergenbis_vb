@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# Check if the virtual environment at ../.venv is activated
+if [[ -n "$VIRTUAL_ENV" && "$VIRTUAL_ENV" == "$(cd ../.venv && pwd)" ]]; then
+    echo "Virtual environment already activated."
+else
+    echo "Activating the virtual environment..."
+    source ../.venv/bin/activate
+fi
 
 if [[ "$1" == "--help" ]]; then
     echo "Usage:"
