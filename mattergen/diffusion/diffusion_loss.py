@@ -21,6 +21,8 @@ def volume(x, t):
     cell = x.cell  # shape: [B, 3, 3]
     if cell is None:
         raise ValueError("ChemGraph has no cell attribute set.")
+    if cell.dim() == 2:
+        cell = cell.unsqueeze(0)
     # a, b, c: [N, 3]
     a, b, c = cell[:, 0, :], cell[:, 1, :], cell[:, 2, :]
     # dot(a, cross(b, c)): [N]
