@@ -163,6 +163,8 @@ This value will be routed into your `new_loss` implementation as the input `targ
 
 ## ⚙️ Example Command
 
+These were the best parameter we found for our experiment :
+
 ```bash
 mattergen-generate results/test_env \
     --pretrained-name=chemical_system \
@@ -170,7 +172,7 @@ mattergen-generate results/test_env \
     --guidance="{'environment': {'mode': 'huber', 'Cu-P': [4, 2.5], 'Cu-Cu': [0, 2.9]}}" \
     --diffusion_guidance_factor=2.0 \
     --diffusion_loss_weight="[0.01, 0.01, True]" \
-    --self_rec_steps=3 --back_step=2 --algo=True
+    --self_rec_steps=3 --back_step=2 --algo=1
 ```
 
 ---
