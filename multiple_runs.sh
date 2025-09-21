@@ -52,7 +52,10 @@ GPU=${14:-None}
 SUF="_guided-${ALG}_"
 
 clean_env="${ENV//\'/}"    # Remove all single quotes
-clean_env="${clean_env//:/}" 
+clean_env="${clean_env//:/}"
+clean_env="${clean_env// /}"
+clean_env="${clean_env//[/}"
+clean_env="${clean_env//]/}"
 
 SUF=${SUF}"env${clean_env}_"
 
