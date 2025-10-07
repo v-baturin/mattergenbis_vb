@@ -642,6 +642,7 @@ def make_combined_loss(guidance_dict: dict) -> callable:
 LOSS_REGISTRY: Dict[str, Callable[..., torch.Tensor]] = {
     "volume": volume_loss,
     "environment": environment_loss,
+    "dominant_environment": dominant_environment_loss,
     # "energy": energy,
     "new_loss": new_loss,  # Placeholder for a new loss function
     # Add more loss functions as needed

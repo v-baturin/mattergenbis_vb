@@ -53,11 +53,12 @@ Usage: multiple_run.sh [options]
   -O OOM_BACKOFF_PCT      Backoff percent for batch size (integer, e.g., 70 means 70%). Default: 80
   -N MIN_BATCH_SIZE       Minimum allowed batch size before giving up. Default: 1
   -W WAIT_SEC             Seconds to wait between retries (cooldown). Default: 10
+  -f FORCE_GPU            Index of the invoked gpu. Default: 0
   -h                      Show this help and exit.
 
 Examples:
-  ./multiple_run.sh -x 1 -s "Li-Co-O" -t dominant_environment -p "{'Co-O':[3]}"
-  ./multiple_run.sh -x 1 -s "Si-O"    -t environment           -p "{'mode':'huber','Si-O':[6]}"
+  ./multiple_run.sh -x 1 -s "Li-Co-O" -t dominant_environment -p "{'Co-O': 3}"
+  ./multiple_run.sh -x 1 -s "Si-O"    -t environment           -p "{'mode':'huber','Si-O':[6, 0.5]}"
 USAGE
 }
 
@@ -84,8 +85,9 @@ OOM_RETRIES=30
 OOM_BACKOFF_PCT=80
 MIN_BATCH_SIZE=1
 WAIT_SEC=10
+FORCE_GPU=0
 
-while getopts ":x:s:t:p:b:m:d:u:v:c:r:B:a:M:F:o:l:e:R:O:N:W:h" opt; do
+while getopts ":x:s:t:p:b:m:d:u:v:c:r:B:a:M:F:o:l:e:R:O:N:W:f:h" opt; do
   case "$opt" in
     x) RUNS="$OPTARG" ;;
     s) SYS="$OPTARG" ;;
@@ -109,6 +111,7 @@ while getopts ":x:s:t:p:b:m:d:u:v:c:r:B:a:M:F:o:l:e:R:O:N:W:h" opt; do
     O) OOM_BACKOFF_PCT="$OPTARG" ;;
     N) MIN_BATCH_SIZE="$OPTARG" ;;
     W) WAIT_SEC="$OPTARG" ;;
+    f) FORCE_GPU="$OPTARG" ;;
     h) usage; exit 0 ;;
     \?) echo "Unknown option -$OPTARG" >&2; usage; exit 2 ;;
     :) echo "Option -$OPTARG requires an argument." >&2; usage; exit 2 ;;
@@ -208,6 +211,7 @@ for i in $(seq 1 "$RUNS"); do
           --self_rec_steps="$R"
           --back_step="$B"
           --algo="$ALG"
+          -f "$FORCE_GPU"
     )
 
     if [[ -n "$GPU_MEM_GB" ]]; then
