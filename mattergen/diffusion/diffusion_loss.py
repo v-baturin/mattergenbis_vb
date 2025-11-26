@@ -44,6 +44,21 @@ def volume_loss(x, t, target):
     loss = torch.abs(vol - target_tensor)
     return 10 ** -5 * loss
 
+def volume_pa(x, t):
+    """
+    Batched computatuion of volume per atom.
+    """
+    return volume(x, t) / x.num_atoms
+
+def volume_pa_loss(x, t, target):
+    """
+    Batched computatuion of volume per atom.
+    """
+    vol_pa = volume_pa(x,t)
+    target_tensor = torch.as_tensor(target, dtype=vol_pa.dtype, device=vol_pa.device)
+    loss = torch.abs(vol_pa - target_tensor)
+    return loss
+
 
 def compute_species_pair(
         cell: torch.Tensor,  # (B, 3, 3) or (3, 3)
@@ -641,6 +656,7 @@ def make_combined_loss(guidance_dict: dict) -> callable:
 
 LOSS_REGISTRY: Dict[str, Callable[..., torch.Tensor]] = {
     "volume": volume_loss,
+    "volume_pa": volume_pa_loss,
     "environment": environment_loss,
     "dominant_environment": dominant_environment_loss,
     # "energy": energy,
