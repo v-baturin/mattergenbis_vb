@@ -10,6 +10,26 @@ import pandas as pd
 from ase import Atoms
 from ase.data import chemical_symbols
 
+PDIAG = None
+calc = None
+converter = None
+species_pairs = None
+target_values = None
+r_cuts = None
+target_tensor = None
+shifts = None
+
+def clear_globals():
+    global PDIAG, calc, converter, species_pairs, target_values, r_cuts, target_tensor
+    PDIAG = None
+    calc = None
+    converter = None
+    species_pairs = None
+    target_values = None
+    r_cuts = None
+    target_tensor = None
+
+
 
 def volume(x, t):
     """
