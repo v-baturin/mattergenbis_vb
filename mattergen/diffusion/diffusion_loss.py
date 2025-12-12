@@ -510,14 +510,18 @@ def environment_loss(
                 alpha=alpha
             )
         )
-    f_AB = torch.stack(f_AB_list)  # shape: (num_pairs, batch_size)
+    f_AB = torch.stack(f_AB_list)  # shape: (num_pairs,) or (num_pairs, B)
 
-    # Ensure target is broadcastable
+    # Force 2D: (num_pairs, B) with B=1 when single-structure
+    if f_AB.ndim == 1:
+        f_AB = f_AB.unsqueeze(1)  # (num_pairs, 1)
+
+    # Prepare targets to match (num_pairs, B)
     global target_tensor
     if target_tensor is None:
-        target_tensor = torch.tensor(target_values, dtype=f_AB.dtype, device=f_AB.device).unsqueeze(1)  # (num_pairs, 1)
-        if target_tensor.shape[1] == 1 and len(f_AB.shape) > 1:
-            target_tensor = target_tensor.expand(-1, f_AB.shape[1])  # (num_pairs, batch_size)
+        B = f_AB.shape[1]
+        target_vec = torch.as_tensor(target_values, dtype=f_AB.dtype, device=f_AB.device).view(-1, 1)  # (num_pairs, 1)
+        target_tensor = target_vec.expand(-1, B)  # (num_pairs, B)
 
     # Compute the loss
     if mode == "l1" or mode == None or mode == "test":
@@ -545,14 +549,7 @@ INTER_ATOMIC_CUTOFF = {1: 0.31, 2: 0.28, 3: 1.28, 4: 0.96, 5: 0.84, 6: 0.76, 7: 
                        67: 1.92, 68: 1.89, 69: 1.9, 70: 1.87, 71: 1.87, 72: 1.75, 73: 1.7, 74: 1.62, 75: 1.51, 76: 1.44,
                        77: 1.41, 78: 1.36, 79: 1.36, 80: 1.32, 81: 1.45, 82: 1.46, 83: 1.48, 84: 1.4, 85: 1.5, 86: 1.5,
                        87: 2.6, 88: 2.21, 89: 2.15, 90: 2.06, 91: 2.0, 92: 1.96, 93: 1.9, 94: 1.87, 95: 1.8, 96: 1.69}
-PDIAG = None
-calc = None
-converter = None
-species_pairs = None
-target_values = None
-r_cuts = None
-target_tensor = None
-shifts = None
+
 
 
 def composition(num, pos):
