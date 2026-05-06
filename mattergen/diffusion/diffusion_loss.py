@@ -242,7 +242,7 @@ def _soft_neighbor_counts_per_A_single(
 
     if r_cut is None:
         # chemistry-informed default
-        r_cut = INTER_ATOMIC_CUTOFF[type_A] + INTER_ATOMIC_CUTOFF[type_B] + 0.5
+        r_cut = INTER_ATOMIC_CUTOFF[type_A] + INTER_ATOMIC_CUTOFF[type_B] + 1.0
 
     # PBC 27 images
     global shifts
