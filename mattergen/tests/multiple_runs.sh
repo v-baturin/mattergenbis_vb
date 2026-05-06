@@ -27,6 +27,14 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+log() {
+  printf '%s >>> %s\n' "$(date -Is)" "$*"
+}
+
+log_err() {
+  printf '%s >>> %s\n' "$(date -Is)" "$*" >&2
+}
+
 usage() {
   cat <<'USAGE'
 Usage: multiple_run.sh [options]
@@ -155,15 +163,15 @@ if [[ -z "$LOGFILE" ]]; then
   LOGFILE="${DIR}/mattergen.log"
 fi
 
-echo ">>> multiple_run.sh starting"
-echo ">>> System:            $SYS"
-echo ">>> Guidance type:     $GUIDTYPE  (tag: $TYPE_TAG)"
-echo ">>> Guidance param:    $GUIDPARAM  (tag: $PARAM_TAG)"
-echo ">>> Output directory:  $DIR"
-echo ">>> Log file:          $LOGFILE"
-echo ">>> Runs:              $RUNS"
-echo ">>> mattergen: batch_size=$NB num_batches=$MUL dgf=$DGF dlw=[$G,$K,$NORM] rec=$R back=$B algo=$ALG gpu_mem=$GPU_MEM_GB frac=$FRAC"
-echo ">>> OOM: retries=$OOM_RETRIES backoff=${OOM_BACKOFF_PCT}% min_batch=$MIN_BATCH_SIZE wait=${WAIT_SEC}s"
+log "multiple_run.sh starting"
+log "System:            $SYS"
+log "Guidance type:     $GUIDTYPE  (tag: $TYPE_TAG)"
+log "Guidance param:    $GUIDPARAM  (tag: $PARAM_TAG)"
+log "Output directory:  $DIR"
+log "Log file:          $LOGFILE"
+log "Runs:              $RUNS"
+log "mattergen: batch_size=$NB num_batches=$MUL dgf=$DGF dlw=[$G,$K,$NORM] rec=$R back=$B algo=$ALG gpu_mem=$GPU_MEM_GB frac=$FRAC"
+log "OOM: retries=$OOM_RETRIES backoff=${OOM_BACKOFF_PCT}% min_batch=$MIN_BATCH_SIZE wait=${WAIT_SEC}s"
 echo "--------------------------------------------------------------------"
 
 # Turn EXTRA into an array safely (word-splitting respecting quotes)
@@ -230,19 +238,19 @@ for i in $(seq 1 "$RUNS"); do
       printf 'CMD: '; printf '%q ' "${cmd[@]}"; printf '\n'
     } >> "$LOGFILE"
 
-    echo ">>> [Run $i/$RUNS | Attempt $attempt] Launching with batch_size=$cur_nb → $RUN_PATH"
+    log "[Run $i/$RUNS | Attempt $attempt] Launching with batch_size=$cur_nb → $RUN_PATH"
     set +e
     "${cmd[@]}" >> "$LOGFILE" 2>&1
     status=$?
     set -e
 
     if [[ $status -eq 0 ]]; then
-      echo ">>> [Run $i] SUCCESS on attempt $attempt (batch_size=$cur_nb)"
+      log "[Run $i] SUCCESS on attempt $attempt (batch_size=$cur_nb)"
       break
     fi
 
     # Non-zero exit: decide if it's OOM-like
-    echo ">>> [Run $i] Non-zero exit ($status). Inspecting log for OOM…"
+    log "[Run $i] Non-zero exit ($status). Inspecting log for OOM…"
     oom_hint=false
     # Exit code 137 is often OOM-kill; 9 (SIGKILL) can be as well.
     if [[ $status -eq 137 || $status -eq 9 || $status -eq 143 ]]; then
@@ -253,34 +261,34 @@ for i in $(seq 1 "$RUNS"); do
 
     if $oom_hint; then
       if [[ $attempt -gt $OOM_RETRIES ]]; then
-        echo ">>> [Run $i] OOM persisted after $OOM_RETRIES retries. Giving up. See $LOGFILE" >&2
+        log_err "[Run $i] OOM persisted after $OOM_RETRIES retries. Giving up. See $LOGFILE"
         exit 1
       fi
 
       # compute new batch size with integer backoff
       new_nb=$(( (cur_nb * OOM_BACKOFF_PCT + 99) / 100 ))  # ceiling division
       if [[ $new_nb -lt $MIN_BATCH_SIZE ]]; then
-        echo ">>> [Run $i] New batch_size=$new_nb would be < MIN_BATCH_SIZE=$MIN_BATCH_SIZE. Aborting." >&2
+        log_err "[Run $i] New batch_size=$new_nb would be < MIN_BATCH_SIZE=$MIN_BATCH_SIZE. Aborting."
         exit 1
       fi
       if [[ $new_nb -ge $cur_nb ]]; then
         new_nb=$((cur_nb - 1))
         if [[ $new_nb -lt $MIN_BATCH_SIZE ]]; then
-          echo ">>> [Run $i] Cannot reduce batch_size further (cur=$cur_nb, min=$MIN_BATCH_SIZE). Aborting." >&2
+          log_err "[Run $i] Cannot reduce batch_size further (cur=$cur_nb, min=$MIN_BATCH_SIZE). Aborting."
           exit 1
         fi
       fi
 
-      echo ">>> [Run $i] OOM detected. Backing off batch_size: $cur_nb → $new_nb. Cooling down ${WAIT_SEC}s…"
+      log "[Run $i] OOM detected. Backing off batch_size: $cur_nb → $new_nb. Cooling down ${WAIT_SEC}s…"
       sleep "$WAIT_SEC"
       cur_nb="$new_nb"
       continue
     else
-      echo ">>> [Run $i] Failure appears non-OOM. Stop. See $LOGFILE" >&2
+      log_err "[Run $i] Failure appears non-OOM. Stop. See $LOGFILE"
       exit 1
     fi
   done
 done
 
-echo ">>> All runs completed. Output in: $DIR"
-echo ">>> Log at: $LOGFILE"
+log "All runs completed. Output in: $DIR"
+log "Log at: $LOGFILE"
