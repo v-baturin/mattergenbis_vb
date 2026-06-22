@@ -1,0 +1,15 @@
+nohup mattergen-generate ./results/LiCoO_dom3_A5500_1. \
+     --pretrained-name=chemical_system \
+     --batch_size=12 \
+     --num_batches=86 \
+     --properties_to_condition_on="{'chemical_system':'Li-Co-O'}" \
+     --record_trajectories=False \
+     --diffusion_guidance_factor=2.0  \
+     --guidance="{'dominant_environment': {'Co-O': [3]}}" \
+     --diffusion_loss_weight=[1.0,1.0,True] \
+     --print_loss=False \
+     --self_rec_steps=3 \
+     --back_step=2 \
+     --algo=False \
+     --gpu_memory_gb=22 \
+     -f 0 > LiCoO_1_dom_a5500 &

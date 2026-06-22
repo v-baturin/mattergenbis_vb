@@ -1,0 +1,15 @@
+nohup mattergen-generate ./results/LiCoO_dom3_RTX8000_0.01 \
+        --pretrained-name=chemical_system \
+        --batch_size=12 \
+        --num_batches=86 \
+        --properties_to_condition_on="{'chemical_system':'Li-Co-O'}" \
+        --record_trajectories=False \
+        --diffusion_guidance_factor=2.0  \
+        --guidance="{'dominant_environment': {'Co-O': [3]}}" \
+        --diffusion_loss_weight=[0.01,0.01,True] \
+        --print_loss=False \
+        --self_rec_steps=3 \
+        --back_step=2 \
+        --algo=False \
+        --gpu_memory_gb=22 \
+        -f 1 > LiCoO_0.01_dom_rtx8000 &
