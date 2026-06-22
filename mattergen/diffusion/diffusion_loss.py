@@ -242,7 +242,7 @@ def _soft_neighbor_counts_per_A_single(
 
     if r_cut is None:
         # chemistry-informed default
-        r_cut = INTER_ATOMIC_CUTOFF[type_A] + INTER_ATOMIC_CUTOFF[type_B] + 1.0
+        r_cut = INTER_ATOMIC_CUTOFF[type_A] + INTER_ATOMIC_CUTOFF[type_B] + 0.5
 
     # PBC 27 images
     global shifts
@@ -350,7 +350,7 @@ def compute_target_share(
 
 
 # --- New loss: maximize fraction at exact target coordination (minimize 1 - share) ---
-def dominant_environment_loss(
+def target_coordination_loss(
     x: ChemGraph,
     t: Any,
     target: dict,
@@ -360,7 +360,7 @@ def dominant_environment_loss(
     default_tau: float = 0.5,
 ) -> torch.Tensor:
     """
-    For each A-B in `target` with integer neighbor target k, minimize 1 - share_A(k; B),
+    Target-coordination guidance. For each A-B in `target` with integer neighbor target k, minimize 1 - share_A(k; B),
     where share_A(k; B) is computed with a Gaussian window of width `tau` in coordination space.
 
     `target` can be:
@@ -412,6 +412,11 @@ def dominant_environment_loss(
     return loss.sum(dim=0)                        # (B,)
 
 
+def dominant_environment_loss(*args, **kwargs) -> torch.Tensor:
+    """Backward-compatible alias for target_coordination_loss."""
+    return target_coordination_loss(*args, **kwargs)
+
+
 def compute_mean_coordination(
         cell: torch.Tensor,  # (B, 3, 3) or (3, 3)
         frac: torch.Tensor,  # (B, N, 3) or (N, 3)
@@ -457,7 +462,7 @@ def compute_mean_coordination(
     return out
 
 
-def environment_loss(
+def mean_coordination_loss(
         x: ChemGraph,
         t: Any,
         target: dict,
@@ -466,24 +471,24 @@ def environment_loss(
         alpha: float = 8.0
 ) -> torch.Tensor:
     """
-    Computes the environment loss for a given ChemGraph.
+    Computes the mean pair-coordination loss for a given ChemGraph.
     Example of target: {'O-H': 1, 'O-C': [1,2.0], 'C-C': 2}
     Meaning that the environment of O should have 1 H and 1 C but with a r_cut of 2.0 for C, and the environment of C should have 2 C.
-    The non-specified distance will be using the default r_cut, which is the sum of the covalent radii of the two species plus 1.0.
-    The function computes the environment loss for the specified species in the ChemGraph.
+    The non-specified distance will be using the default r_cut, which is the sum of the covalent radii of the two species plus 0.5.
+    The function computes the mean coordination loss for the specified species in the ChemGraph.
     The loss is computed as the absolute difference between the computed environment and the target value.
 
     Args:
         x (ChemGraph): The input ChemGraph.
         t (Any): Unused, but required for compatibility.
-        target (dict): The species of interest and the target value for each environment.
+        target (dict): The species of interest and the target value for each coordination constraint.
         kernel (str): Kernel type, either 'gaussian' or 'sigmoid'.
         sigma (float): Width for Gaussian kernel.
         r_cut (float | None): Cutoff for sigmoid kernel.
         alpha (float): Sharpness for sigmoid kernel.
 
     Returns:
-        torch.Tensor: The computed environment loss.
+        torch.Tensor: The computed mean coordination loss.
     """
     if not isinstance(x, ChemGraph):
         raise ValueError("x must be a ChemGraph object")
@@ -557,6 +562,11 @@ def environment_loss(
         raise ValueError(f"Unknown mode: {mode}. Supported modes are 'l1', 'huber', and 'l2'.")
 
     return loss.sum(dim=0)  # Sum over all pairs to get a single loss value
+
+
+def environment_loss(*args, **kwargs) -> torch.Tensor:
+    """Backward-compatible alias for mean_coordination_loss."""
+    return mean_coordination_loss(*args, **kwargs)
 
 
 INTER_ATOMIC_CUTOFF = {1: 0.31, 2: 0.28, 3: 1.28, 4: 0.96, 5: 0.84, 6: 0.76, 7: 0.71, 8: 0.66, 9: 0.57, 10: 0.58,
@@ -675,6 +685,8 @@ def make_combined_loss(guidance_dict: dict) -> callable:
 LOSS_REGISTRY: Dict[str, Callable[..., torch.Tensor]] = {
     "volume": volume_loss,
     "volume_pa": volume_pa_loss,
+    "mean_coordination": mean_coordination_loss,
+    "target_coordination": target_coordination_loss,
     "environment": environment_loss,
     "dominant_environment": dominant_environment_loss,
     # "energy": energy,
