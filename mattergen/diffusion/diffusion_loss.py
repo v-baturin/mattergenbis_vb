@@ -5,10 +5,9 @@ from mattergen.common.data.chemgraph import ChemGraph
 from pymatgen.core import Element, Composition
 from pymatgen.analysis.phase_diagram import PhaseDiagram, PDEntry
 import pandas as pd
-# from mattersim.datasets.utils.convertor import ChemGraphBatchConvertor
-# from mattersim.forcefield.m3gnet.m3gnet import M3Gnet
-from ase import Atoms
-from ase.data import chemical_symbols
+from mattersim.datasets.utils.convertor import ChemGraphBatchConvertor
+from mattersim.forcefield.m3gnet.m3gnet import M3Gnet
+
 
 PDIAG = None
 calc = None
@@ -79,131 +78,6 @@ def volume_pa_loss(x, t, target):
     loss = torch.abs(vol_pa - target_tensor)
     return loss
 
-
-# def compute_species_pair(
-#         cell: torch.Tensor,  # (B, 3, 3) or (3, 3)
-#         frac: torch.Tensor,  # (B, N, 3) or (N, 3)
-#         atomic_numbers: torch.Tensor,  # (\Sum N_i)
-#         num_atoms: torch.Tensor,  # Number of atoms in each material, (B,)
-#         type_A: int,
-#         type_B: int,
-#         kernel: str = "sigmoid",
-#         sigma: float = 1.0,
-#         r_cut: float | None = None,
-#         alpha: float = 8.0,
-#         mode: str | None = None
-# ) -> torch.Tensor:
-#     """
-#     Supports batched or single structures.
-#     Returns: (B,) if batched, scalar if single.
-#     """
-#     # If not batched, add batch dimension
-#     if cell.ndim == 2:
-#         cell = cell.unsqueeze(0)
-#         squeeze_out = True
-#     else:
-#         squeeze_out = False
-#
-#     B = cell.shape[0]
-#     results = []
-#     count = 0
-#     for b in range(B):
-#         count_ = count + num_atoms[b]
-#         res = _compute_species_pair_single(
-#             cell[b], frac[count:count_], atomic_numbers[count:count_], type_A, type_B, kernel, sigma, r_cut, alpha, mode
-#         )
-#         results.append(res)
-#         count = count_
-#     out = torch.stack(results)
-#     if squeeze_out:
-#         out = out.squeeze(0)
-#     return out
-
-
-# def _compute_species_pair_single(
-#         cell: torch.Tensor,
-#         frac: torch.Tensor,
-#         types: torch.Tensor,
-#         type_A: int,
-#         type_B: int,
-#         kernel: str = "sigmoid",
-#         sigma: float = 1.0,
-#         r_cut: float | None = None,
-#         alpha: float = 8.0,
-#         mode: str | None = None
-# ) -> torch.Tensor:
-#     """
-#     Compute a differentiable species‐pair value f[A,B], where
-#         f[A,B] = (1 / |A_A|) * sum_{i in A_A} sum_{j in A_B} g(d_ij),
-#     under PBC.  g(d) is either:
-#       - Gaussian:      exp[−(d/sigma)^2]
-#       - Soft‐cutoff:   sigmoid(alpha * (r_cut − d))
-#
-#     Args:
-#       cell      (3×3) Tensor: rows are lattice vectors.
-#       frac      (N×3) Tensor: fractional coords.
-#       types     list of N ints: atomic numbers.
-#       type_A    int: atomic number of species A (the one we want to compute the environment of).
-#       type_B    int: atomic number of species B (the one we are looking in the environment of species A).
-#       kernel    "gaussian" or "sigmoid"
-#       sigma     width for Gaussian (Å)
-#       r_cut     cutoff for sigmoid (Å)
-#       alpha     sharpness for sigmoid
-#
-#     Returns:
-#       f_AB (scalar Tensor), with gradients flowing to cell and positions.
-#     """
-#     device = frac.device
-#     mask_A = (types == type_A)
-#     mask_B = (types == type_B)
-#     idx_A = mask_A.nonzero(as_tuple=True)[0]
-#     idx_B = mask_B.nonzero(as_tuple=True)[0]
-#
-#     if idx_A.numel() == 0 or idx_B.numel() == 0:
-#         return cell.sum() * frac.sum() * 0.0  # No A or B atoms, return 0
-#
-#     # Prepare cutoffs if needed
-#     if r_cut is None:
-#         r_cut = INTER_ATOMIC_CUTOFF[type_A] + INTER_ATOMIC_CUTOFF[type_B] + 0.5  # (N, N)
-#
-#     # PBC images
-#     global shifts
-#     if shifts is None:
-#         shifts = torch.stack(torch.meshgrid(
-#             torch.arange(-1, 2, device=device),
-#             torch.arange(-1, 2, device=device),
-#             torch.arange(-1, 2, device=device),
-#             indexing='ij'
-#         ), dim=-1).reshape(-1, 3)  # (27, 3)
-#
-#     # Get frac for A and B
-#     frac_A = frac[idx_A]  # (n_A, 3)
-#     frac_B = frac[idx_B]  # (n_B, 3)
-#
-#     # Expand B atoms to all images
-#     frac_B_images = frac_B.unsqueeze(1) + shifts.unsqueeze(0)  # (n_B, 27, 3)
-#     frac_B_images = frac_B_images.reshape(-1, 3)  # (n_B*27, 3)
-#
-#     # Compute all distances from each A to all B images
-#     d = frac_A.unsqueeze(1) - frac_B_images.unsqueeze(0)  # (n_A, n_B*27, 3)
-#     dc = torch.matmul(d, cell)  # (n_A, n_B*27, 3)
-#     dist = dc.norm(dim=-1)  # (n_A, n_B*27)
-#
-#     # Kernel
-#     if kernel == "gaussian":
-#         G = torch.exp(- (dist / sigma).pow(2))
-#     elif kernel == "sigmoid":
-#         G = torch.sigmoid(alpha * (r_cut - dist))
-#     else:
-#         raise ValueError("kernel must be 'gaussian' or 'sigmoid'")
-#
-#     # Sum over all pairs
-#     n_A = mask_A.sum()
-#     if n_A < 1e-8:
-#         # to keep the graph differentiable, return 0
-#         return cell.sum() * frac.sum() * 0.0
-#     f_AB = G.sum() / n_A - int(type_A == type_B)  # Subtract self-interaction
-#     return f_AB
 
 # --- Shared per-A soft neighbor counts (PBC, 27 images) ---
 def _soft_neighbor_counts_per_A_single(
@@ -592,41 +466,41 @@ def composition(num, pos):
     return num[num != 101], pos[num != 101]
 
 
-# def energy(x, t, target=None):
-#     """
-#     Computes the energy above the hull for a given composition and energy.
-#     x is a chemgraph batch
-#     The function uses a precomputed phase diagram to determine the energy above the hull.
-#     """
-#     global calc
-#     global converter
-#     if calc is None:
-#         checkpoint = torch.load("/Data/auguste.de-lambilly/mattersim_torch/pretrained_models/mattersim-v1.0.0-1M.pth",
-#                                 map_location="cuda")
-#         model = M3Gnet(**checkpoint["model_args"], device="cuda")  # Add arguments as needed for your configuration
-#         model.load_state_dict(checkpoint["model"])  # Load the model state dict, ensure it's on cuda
-#         model.eval()  # Set to evaluation mode for inference
-#         model = model.to(x.pos.device)  # Move model to the same device as x
-#     if converter is None:
-#         converter = ChemGraphBatchConvertor(twobody_cutoff=5.0, threebody_cutoff=4.0, pbc=True)
-#     if not isinstance(x, ChemGraph):
-#         raise ValueError("x must be a ChemGraph object")
-#
-#     inputs = converter.convert(x)
-#     energies = []
-#     for input in inputs:
-#         if input is None:
-#             # If no atoms, append 0 to results
-#             energies.append(torch.zeros(1, device=x.pos.device) * x.pos.sum() * x.cell.sum())
-#         else:
-#             temp = model(input)
-#             if temp.isnan().any():
-#                 # If NaN, append 0 to results
-#                 energies.append(torch.zeros(1, device=x.pos.device) * x.pos.sum() * x.cell.sum())
-#             else:
-#                 energies.append(temp)  # Otherwise compute the energy estimate
-#     energies = torch.stack(energies)  # Stack the energies into a tensor
-#     return energies
+def energy(x, t, target=None):
+    """
+    Computes the energy above the hull for a given composition and energy.
+    x is a chemgraph batch
+    The function uses a precomputed phase diagram to determine the energy above the hull.
+    """
+    global calc
+    global converter
+    if calc is None:
+        checkpoint = torch.load("/Data/auguste.de-lambilly/mattersim_torch/pretrained_models/mattersim-v1.0.0-1M.pth",
+                                map_location="cuda")
+        model = M3Gnet(**checkpoint["model_args"], device="cuda")  # Add arguments as needed for your configuration
+        model.load_state_dict(checkpoint["model"])  # Load the model state dict, ensure it's on cuda
+        model.eval()  # Set to evaluation mode for inference
+        model = model.to(x.pos.device)  # Move model to the same device as x
+    if converter is None:
+        converter = ChemGraphBatchConvertor(twobody_cutoff=5.0, threebody_cutoff=4.0, pbc=True)
+    if not isinstance(x, ChemGraph):
+        raise ValueError("x must be a ChemGraph object")
+
+    inputs = converter.convert(x)
+    energies = []
+    for input in inputs:
+        if input is None:
+            # If no atoms, append 0 to results
+            energies.append(torch.zeros(1, device=x.pos.device) * x.pos.sum() * x.cell.sum())
+        else:
+            temp = model(input)
+            if temp.isnan().any():
+                # If NaN, append 0 to results
+                energies.append(torch.zeros(1, device=x.pos.device) * x.pos.sum() * x.cell.sum())
+            else:
+                energies.append(temp)  # Otherwise compute the energy estimate
+    energies = torch.stack(energies)  # Stack the energies into a tensor
+    return energies
 
 
 def _energy_hull(x):
