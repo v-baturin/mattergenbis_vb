@@ -522,7 +522,7 @@ def _energy_hull(x):
     return above_hull
 
 
-def new_loss(x, t, target):
+def new_loss(x, t, target) -> torch.Tensor:
     """
     Example of a new loss function.
     This is just a placeholder and should be replaced with an actual implementation.
@@ -561,8 +561,8 @@ LOSS_REGISTRY: Dict[str, Callable[..., torch.Tensor]] = {
     "volume_pa": volume_pa_loss,
     "mean_coordination": mean_coordination_loss,
     "target_coordination": target_coordination_loss,
-    "environment": environment_loss,
-    "dominant_environment": dominant_environment_loss,
+    "environment": environment_loss,  # backward compatibility
+    "dominant_environment": dominant_environment_loss,  # backward compatibility
     # "energy": energy,
     "new_loss": new_loss,  # Placeholder for a new loss function
     # Add more loss functions as needed
