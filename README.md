@@ -60,13 +60,17 @@ You can guide generation using one or more objectives. Each is passed via the `-
   'mode': 'huber',
   'Cu-P': [4, 2.6],
   'Cu-Cu': [0, 2.9],
-  'Cu-S': 1
+  'Cu-S': 1,
+  'H-[Pd,Ni,Pt]': 2
 }}"
 ```
 
 - `mode`: can be `l1`, `l2`, or `huber`
 - `A-B`: `[target_coordination, cutoff_radius]` 
 - `A-B`: `int`; in this case the cutoff radius used is the sum of the covalent radii
+- `A-[B,C,D]`: targets the total coordination of `A` by any species in the set.
+  If no cutoff is supplied, the cutoff is the maximum default cutoff over all `A-B`,
+  `A-C`, and `A-D` pairs.
 - Multiple atom-pair environments may be defined.
 
 ### ⚛️ Energy Objective
@@ -188,4 +192,3 @@ Guidance adapted by Auguste de Lambilly in collaboration with:
 - Nataliya Sokolovska 
 
 For more info on the original project, see MatterGen: [https://github.com/microsoft/mattergen](https://github.com/microsoft/mattergen)
-
