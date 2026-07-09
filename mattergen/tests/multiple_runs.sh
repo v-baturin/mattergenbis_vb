@@ -13,14 +13,14 @@
 #   - Separate RUN_N folders, but retries re-use the same folder for resuming.
 #
 # Examples (mirror your two scenarios):
-# 1) Dominant environment guidance (Co–O coord = 3)
+# 1) Target coordination-share guidance (Co-O coord = 3)
 #    ./multiple_run.sh -x 1 \
 #      -s "Li-Co-O" -t target_coordination_share -p "{'Co-O':[3]}" \
 #      -b 12 -m 86 -d 2.0 -u 1.0 -v 1.0 -c True -r 3 -B 2 -a False -M 22 -F 0
 #
-# 2) Environment guidance with Huber mode (Si–O coord = 6)
+# 2) Mean-coordination (ex environment) guidance with Huber mode (Si-O coord = 6)
 #    ./multiple_run.sh -x 1 \
-#      -s "Si-O" -t environment -p "{'mode':'huber','Si-O':[6, 2.4]}" \
+#      -s "Si-O" -t mean_coordination -p "{'mode':'huber','Si-O':[6, 2.4]}" \
 #      -b 30 -m 5 -d 2.0 -u 0.01 -v 0.01 -c True -r 3 -B 2 -a False -M 20
 # -----------------------------------------------------------------------------
 
@@ -143,7 +143,6 @@ case "$GUIDTYPE" in
   target_coordination)       TYPE_TAG="tcoord" ;;
   dominant_environment)      TYPE_TAG="domenv" ;;
   mean_coordination)         TYPE_TAG="meancoord" ;;
-  environment)               TYPE_TAG="env" ;;
   *)                    TYPE_TAG="$GUIDTYPE" ;;
 esac
 # Sanitize tag (letters/digits/._- only)
