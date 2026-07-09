@@ -5,8 +5,7 @@ from mattergen.common.data.chemgraph import ChemGraph
 from pymatgen.core import Element, Composition
 from pymatgen.analysis.phase_diagram import PhaseDiagram, PDEntry
 import pandas as pd
-from mattersim.datasets.utils.convertor import ChemGraphBatchConvertor
-from mattersim.forcefield.m3gnet.m3gnet import M3Gnet
+
 
 
 PDIAG = None
@@ -482,6 +481,8 @@ def energy(x, t, target=None):
     x is a chemgraph batch
     The function uses a precomputed phase diagram to determine the energy above the hull.
     """
+    from mattersim.datasets.utils.convertor import ChemGraphBatchConvertor
+    from mattersim.forcefield.m3gnet.m3gnet import M3Gnet
     global calc
     global converter
     if calc is None:
