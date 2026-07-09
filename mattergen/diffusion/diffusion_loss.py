@@ -486,7 +486,7 @@ def energy(x, t, target=None):
     global calc
     global converter
     if calc is None:
-        checkpoint = torch.load("/Data/auguste.de-lambilly/mattersim_torch/pretrained_models/mattersim-v1.0.0-1M.pth",
+        checkpoint = torch.load("/path/to/mattersim_torch/pretrained_models/mattersim-v1.0.0-1M.pth",
                                 map_location="cuda")
         model = M3Gnet(**checkpoint["model_args"], device="cuda")  # Add arguments as needed for your configuration
         model.load_state_dict(checkpoint["model"])  # Load the model state dict, ensure it's on cuda
@@ -520,7 +520,7 @@ def _energy_hull(x):
     x is a (Compo, Energy) tuple (str, float)
     CSV : Compo , Energy
     """
-    dir = "/Data/auguste.de-lambilly/mattergenbis/phase_diagram/"  # This should be the directory where the phase diagram is saved
+    dir = "/path/to/mattergenbis/phase_diagram/"  # This should be the directory where the phase diagram is saved
     global PDIAG
     if PDIAG is None:
         # Load the CSV file only once
