@@ -283,7 +283,7 @@ def _soft_neighbor_counts_per_A_single(
 
 
 # --- Batched share metric: fraction of A atoms with ~target B neighbors ---
-def _compute_target_share_single(
+def _compute_target_coordination_share_single(
     cell: torch.Tensor,
     frac: torch.Tensor,
     types: torch.Tensor,
@@ -310,7 +310,7 @@ def _compute_target_share_single(
     return H.mean()
 
 
-def compute_target_share(
+def compute_target_coordination_share(
     cell: torch.Tensor,           # (B, 3, 3) or (3, 3)
     frac: torch.Tensor,           # (B, N, 3) or (N, 3)
     atomic_numbers: torch.Tensor, # (sumN_i,)
@@ -338,7 +338,7 @@ def compute_target_share(
     count = 0
     for b in range(B):
         count_ = count + num_atoms[b]
-        res = _compute_target_share_single(
+        res = _compute_target_coordination_share_single(
             cell[b], frac[count:count_], atomic_numbers[count:count_],
             type_A, type_B,
             target=target, tau=tau, kernel=kernel, sigma=sigma, r_cut=r_cut, alpha=alpha
@@ -349,8 +349,13 @@ def compute_target_share(
     return out.squeeze(0) if squeeze_out else out
 
 
+def compute_target_share(*args, **kwargs) -> torch.Tensor:
+    """Backward-compatible alias for compute_target_coordination_share."""
+    return compute_target_coordination_share(*args, **kwargs)
+
+
 # --- New loss: maximize fraction at exact target coordination (minimize 1 - share) ---
-def target_coordination_loss(
+def target_coordination_share_loss(
     x: ChemGraph,
     t: Any,
     target: dict,
@@ -395,7 +400,7 @@ def target_coordination_loss(
 
         ZA, ZB = (Element(sym).Z for sym in species_pair.split('-'))
 
-        sh = compute_target_share(
+        sh = compute_target_coordination_share(
             cell=cell, frac=frac, atomic_numbers=atomic_numbers, num_atoms=num_atoms,
             type_A=ZA, type_B=ZB,
             target=tgt, tau=tau, kernel=kernel, sigma=sigma, r_cut=rcut, alpha=alpha
@@ -412,9 +417,14 @@ def target_coordination_loss(
     return loss.sum(dim=0)                        # (B,)
 
 
+def target_coordination_loss(*args, **kwargs) -> torch.Tensor:
+    """Backward-compatible alias for target_coordination_share_loss."""
+    return target_coordination_share_loss(*args, **kwargs)
+
+
 def dominant_environment_loss(*args, **kwargs) -> torch.Tensor:
-    """Backward-compatible alias for target_coordination_loss."""
-    return target_coordination_loss(*args, **kwargs)
+    """Backward-compatible alias for target_coordination_share_loss."""
+    return target_coordination_share_loss(*args, **kwargs)
 
 
 def compute_mean_coordination(
@@ -686,6 +696,7 @@ LOSS_REGISTRY: Dict[str, Callable[..., torch.Tensor]] = {
     "volume": volume_loss,
     "volume_pa": volume_pa_loss,
     "mean_coordination": mean_coordination_loss,
+    "target_coordination_share": target_coordination_share_loss,
     "target_coordination": target_coordination_loss,
     "environment": environment_loss,
     "dominant_environment": dominant_environment_loss,

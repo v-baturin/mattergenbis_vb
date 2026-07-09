@@ -15,7 +15,7 @@
 # Examples (mirror your two scenarios):
 # 1) Dominant environment guidance (Co–O coord = 3)
 #    ./multiple_run.sh -x 1 \
-#      -s "Li-Co-O" -t dominant_environment -p "{'Co-O':[3]}" \
+#      -s "Li-Co-O" -t target_coordination_share -p "{'Co-O':[3]}" \
 #      -b 12 -m 86 -d 2.0 -u 1.0 -v 1.0 -c True -r 3 -B 2 -a False -M 22 -F 0
 #
 # 2) Environment guidance with Huber mode (Si–O coord = 6)
@@ -40,7 +40,7 @@ usage() {
 Usage: multiple_run.sh [options]
   -x RUNS                 Number of runs (loop iterations). Default: 1
   -s SYS                  Chemical system string (e.g. "Li-Co-O"). Default: "Li-Co-O"
-  -t GUIDTYPE             Guidance type (e.g. environment | dominant_environment). Default: "environment"
+  -t GUIDTYPE             Guidance type (e.g. mean_coordination | target_coordination_share). Default: "mean_coordination"
   -p GUIDPARAM            Guidance param as Python dict literal, e.g. "{'Co-O':[3, 2.3]}" (MUST include braces, 3 instead of [3] for default cutoff)
   -b NB                   --batch_size (starting). Default: 12
   -m MUL                  --num_batches. Default: 1
@@ -65,15 +65,15 @@ Usage: multiple_run.sh [options]
   -h                      Show this help and exit.
 
 Examples:
-  ./multiple_run.sh -x 1 -s "Li-Co-O" -t dominant_environment -p "{'Co-O': 3}"
-  ./multiple_run.sh -x 1 -s "Si-O"    -t environment           -p "{'mode':'huber','Si-O':[6, 2.5]}"
+  ./multiple_run.sh -x 1 -s "Li-Co-O" -t target_coordination_share -p "{'Co-O': 3}"
+  ./multiple_run.sh -x 1 -s "Si-O"    -t mean_coordination         -p "{'mode':'huber','Si-O':[6, 2.5]}"
 USAGE
 }
 
 # Defaults
 RUNS=50
 SYS="Li-Co-O"
-GUIDTYPE="environment"
+GUIDTYPE="mean_coordination"
 GUIDPARAM="{'Co-O':[3]}"
 NB=12
 MUL=1
@@ -139,8 +139,11 @@ fi
 
 # --- Guidance type short tag ---
 case "$GUIDTYPE" in
-  dominant_environment) TYPE_TAG="domenv" ;;
-  environment)          TYPE_TAG="env" ;;
+  target_coordination_share) TYPE_TAG="tcoordshare" ;;
+  target_coordination)       TYPE_TAG="tcoord" ;;
+  dominant_environment)      TYPE_TAG="domenv" ;;
+  mean_coordination)         TYPE_TAG="meancoord" ;;
+  environment)               TYPE_TAG="env" ;;
   *)                    TYPE_TAG="$GUIDTYPE" ;;
 esac
 # Sanitize tag (letters/digits/._- only)

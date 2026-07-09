@@ -6,7 +6,7 @@ This README explains how to use **scout-matter**, our modified version of Micros
 
 ## 📅 Quick Start
 
-Example to generate structures with environment-based guidance:
+Example to generate structures with mean-coordination guidance:
 
 ```bash
 mattergen-generate "results/Li-Co-O_guided_env" \
@@ -15,7 +15,7 @@ mattergen-generate "results/Li-Co-O_guided_env" \
     --properties_to_condition_on="{'chemical_system':'Li-Co-O'}" \
     --record_trajectories=False \
     --diffusion_guidance_factor=2.0 \
-    --guidance="{'environment': {'mode': 'huber', 'Co-O': [6, 2.6]}}" \
+    --guidance="{'mean_coordination': {'mode': 'huber', 'Co-O': [6, 2.6]}}" \
     --diffusion_loss_weight="[0.01, 0.01, True]" \
     --print_loss=False \
     --self_rec_steps=3 \
@@ -53,10 +53,10 @@ mattergen-generate "results/Li-Co-O_guided_env" \
 
 You can guide generation using one or more objectives. Each is passed via the `--guidance` argument.
 
-### 🔮 Environment Objective
+### 🔮 Mean-Coordination Objective
 
 ```bash
---guidance="{'environment': {
+--guidance="{'mean_coordination': {
   'mode': 'huber',
   'Cu-P': [4, 2.6],
   'Cu-Cu': [0, 2.9],
@@ -65,7 +65,7 @@ You can guide generation using one or more objectives. Each is passed via the `-
 ```
 
 - `mode`: can be `l1`, `l2`, or `huber`
-- `A-B`: `[target_coordination, cutoff_radius]` 
+- `A-B`: `[target_CN, cutoff_radius]`
 - `A-B`: `int`; in this case the cutoff radius used is the sum of the covalent radii
 - Multiple atom-pair environments may be defined.
 
@@ -90,7 +90,7 @@ You can guide generation using one or more objectives. Each is passed via the `-
 ### 📊 Combine Multiple Objectives
 
 ```bash
---guidance="{'energy': None, 'environment': {'mode': 'l1', 'Li-O': [4, 2.5]}, 'volume': 75.0}"
+--guidance="{'energy': None, 'mean_coordination': {'mode': 'l1', 'Li-O': [4, 2.5]}, 'volume': 75.0}"
 ```
 
 ---
@@ -188,4 +188,3 @@ Guidance adapted by Auguste de Lambilly in collaboration with:
 - Nataliya Sokolovska 
 
 For more info on the original project, see MatterGen: [https://github.com/microsoft/mattergen](https://github.com/microsoft/mattergen)
-
