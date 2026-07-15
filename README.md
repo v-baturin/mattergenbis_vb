@@ -53,47 +53,6 @@ mattergen-generate "results/Li-Co-O_guided_env" \
 
 You can guide generation using one or more objectives. Each is passed via the `--guidance` argument.
 
-## 🔁 Multiple Guided Runs
-
-Use `multiple_runs.sh` when you want to launch the same environment-guided generation several times in sequence and merge the generated structures into one `.extxyz` file.
-
-```bash
-./multiple_runs.sh --help
-```
-
-The script uses positional arguments:
-
-```bash
-bash multiple_runs.sh NB LOG MUL BASE SYS ENV G K Norm R B ALG MOD GPU
-```
-
-- `NB`: samples per run, passed as `--batch_size`
-- `LOG`: log file written by the script
-- `MUL`: number of sequential runs
-- `BASE`: base directory used when collecting generated results, for example `./`
-- `SYS`: chemical system, for example `Si-O` or `Li-Co-O`
-- `ENV`: environment target passed inside `{'environment': {...}}`
-- `G K Norm`: `--diffusion_loss_weight=[G,K,Norm]`
-- `R B ALG`: `--self_rec_steps`, `--back_step`, and `--algo`
-- `MOD`: environment loss mode, for example `huber`; use `None` for the default mode
-- `GPU`: GPU index passed to `--force_gpu`; use `None` to leave it unset
-
-Example with a default cutoff, meaning six `Si-O` neighbors using the built-in cutoff:
-
-```bash
-bash multiple_runs.sh 20 log.txt 50 ./ \
-    Si-O "'Si-O':6" 0.01 0.01 True 3 2 1 huber 0
-```
-
-Example with an explicit cutoff, meaning six `Si-O` neighbors with `r_cut=2.5`:
-
-```bash
-bash multiple_runs.sh 20 log.txt 50 ./ \
-    Si-O "'Si-O':[6, 2.5]" 0.01 0.01 True 3 2 1 huber 0
-```
-
-Each run writes to a numbered directory under `results/`. At the end, the script appends all `generated_crystals.extxyz` files into `${BASE}results/${SYS}_f/generated_crystals${SUF}.extxyz` and records per-run durations in `durations.txt`. The script currently tries to activate `../.venv`; adjust that path if your MatterGen environment lives elsewhere.
-
 ### 🔮 Mean-Coordination Objective
 
 ```bash
@@ -133,6 +92,64 @@ Each run writes to a numbered directory under `results/`. At the end, the script
 ```bash
 --guidance="{'energy': None, 'mean_coordination': {'mode': 'l1', 'Li-O': [4, 2.5]}, 'volume': 75.0}"
 ```
+
+## 🔁 Multiple Guided Runs
+
+Use `multiple_runs.sh` when you want to repeat the same environment-guided generation several times in sequence. It creates `MUL` numbered output folders, each containing one `generated_crystals.extxyz` file with `NB` generated structures. The wrapper supports environment multiobjective guidance: several atom-pair environment targets can be optimized in the same run.
+
+This wrapper is specialized for the `environment` objective. Its positional `ENV` argument is inserted into:
+
+```bash
+--guidance="{'environment': {'mode': MOD, ENV}}"
+```
+
+`ENV` is the comma-separated content of the `environment` dictionary. It may contain one pair target, for example `"'Si-O':[6, 2.5]"`, or several pair targets, for example `"'Cu-P':[4, 2.5], 'Cu-Cu':[0, 2.9]"`.
+
+The script always wraps `ENV` inside the top-level `environment` objective. For top-level multiobjective guidance such as `{'environment': {...}, 'energy': None, 'volume': 75.0}`, call `mattergen-generate` directly with the full `--guidance` dictionary shown above, or extend `multiple_runs.sh` to accept a complete guidance dictionary instead of only `ENV` and `MOD`.
+
+```bash
+./multiple_runs.sh --help
+```
+
+The script uses positional arguments:
+
+```bash
+bash multiple_runs.sh NB LOG MUL BASE SYS ENV G K Norm R B ALG MOD GPU
+```
+
+- `NB`: samples per run, passed as `--batch_size`
+- `LOG`: log file written by the script
+- `MUL`: number of sequential runs
+- `BASE`: base directory used when collecting generated results, for example `./`
+- `SYS`: chemical system, for example `Si-O` or `Li-Co-O`
+- `ENV`: environment target or targets inserted into `{'environment': {'mode': MOD, ENV}}`, for example `"'Si-O':6"`, `"'Si-O':[6, 2.5]"`, or `"'Cu-P':[4, 2.5], 'Cu-Cu':[0, 2.9]"`
+- `G K Norm`: `--diffusion_loss_weight=[G,K,Norm]`
+- `R B ALG`: `--self_rec_steps`, `--back_step`, and `--algo`
+- `MOD`: environment loss mode, for example `huber`; use `None` for the default mode
+- `GPU`: GPU index passed to `--force_gpu`; use `None` to leave it unset
+
+Example with a default cutoff, meaning six `Si-O` neighbors using the built-in cutoff:
+
+```bash
+bash multiple_runs.sh 20 log.txt 50 ./ \
+    Si-O "'Si-O':6" 0.01 0.01 True 3 2 1 huber 0
+```
+
+Example with an explicit cutoff, meaning six `Si-O` neighbors with `r_cut=2.5`:
+
+```bash
+bash multiple_runs.sh 20 log.txt 50 ./ \
+    Si-O "'Si-O':[6, 2.5]" 0.01 0.01 True 3 2 1 huber 0
+```
+
+Example with multiple environment targets in the same run:
+
+```bash
+bash multiple_runs.sh 20 log.txt 50 ./ \
+    Cu-P-Cu "'Cu-P':[4, 2.5], 'Cu-Cu':[0, 2.9]" 0.01 0.01 True 3 2 1 huber 0
+```
+
+Each run writes to a numbered directory under `results/`, for example `results/${SYS}${SUF}_1`, `results/${SYS}${SUF}_2`, and so on. Each directory contains its own `generated_crystals.extxyz` file. The script also records per-run durations in `durations.txt`. It currently tries to activate `../.venv`; adjust that path if your MatterGen environment lives elsewhere.
 
 ---
 
