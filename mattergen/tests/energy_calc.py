@@ -22,11 +22,11 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 logger.info(f"Running MatterSim on {device}")
 
 # Directory containing the extxyz files
-base_dir = "/users/eleves-b/2021/auguste.de-lambilly/results/Li-Co-O_f"
+base_dir = "/path/to/results-root/results/Li-Co-O_f"
 extxyz_files = glob.glob(os.path.join(base_dir, "generated_crystals*.extxyz"), recursive=True)
 
 # Initialize MatterSimCalculator
-calculator = MatterSimCalculator(device=device, load_path="/Data/auguste.de-lambilly/mattersim_torch/pretrained_models/mattersim-v1.0.0-5M.pth")
+calculator = MatterSimCalculator(device=device, load_path="/path/to/mattersim_torch/pretrained_models/mattersim-v1.0.0-5M.pth")
 
 # Global variable for the phase diagram
 PDIAG = None
@@ -36,7 +36,7 @@ def _energy_hull(composition, energy):
     Computes the energy above the hull for a given composition and energy.
     """
     global PDIAG
-    dir = "/Data/auguste.de-lambilly/mattergenbis/phase_diagram/"  # Directory for the phase diagram CSV
+    dir = "/path/to/mattergenbis/phase_diagram/"  # Directory for the phase diagram CSV
     if PDIAG is None:
         # Load the CSV file only once
         csv = pd.read_csv(os.path.join(dir, "LiCoO.csv"))

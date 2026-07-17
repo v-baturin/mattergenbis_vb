@@ -6,7 +6,7 @@ This README explains how to use **scout-matter**, our modified version of Micros
 
 ## 📅 Quick Start
 
-Example to generate structures with environment-based guidance:
+Example to generate structures with mean-coordination guidance:
 
 ```bash
 mattergen-generate "results/Li-Co-O_guided_env" \
@@ -15,7 +15,7 @@ mattergen-generate "results/Li-Co-O_guided_env" \
     --properties_to_condition_on="{'chemical_system':'Li-Co-O'}" \
     --record_trajectories=False \
     --diffusion_guidance_factor=2.0 \
-    --guidance="{'environment': {'mode': 'huber', 'Co-O': [6, 2.6]}}" \
+    --guidance="{'mean_coordination': {'mode': 'huber', 'Co-O': [6, 2.6]}}" \
     --diffusion_loss_weight="[0.01, 0.01, True]" \
     --print_loss=False \
     --self_rec_steps=3 \
@@ -53,10 +53,51 @@ mattergen-generate "results/Li-Co-O_guided_env" \
 
 You can guide generation using one or more objectives. Each is passed via the `--guidance` argument.
 
-### 🔮 Environment Objective
+## 🔁 Multiple Guided Runs
+
+Use `multiple_runs.sh` when you want to launch the same environment-guided generation several times in sequence and merge the generated structures into one `.extxyz` file.
 
 ```bash
---guidance="{'environment': {
+./multiple_runs.sh --help
+```
+
+The script uses positional arguments:
+
+```bash
+bash multiple_runs.sh NB LOG MUL BASE SYS ENV G K Norm R B ALG MOD GPU
+```
+
+- `NB`: samples per run, passed as `--batch_size`
+- `LOG`: log file written by the script
+- `MUL`: number of sequential runs
+- `BASE`: base directory used when collecting generated results, for example `./`
+- `SYS`: chemical system, for example `Si-O` or `Li-Co-O`
+- `ENV`: environment target passed inside `{'environment': {...}}`
+- `G K Norm`: `--diffusion_loss_weight=[G,K,Norm]`
+- `R B ALG`: `--self_rec_steps`, `--back_step`, and `--algo`
+- `MOD`: environment loss mode, for example `huber`; use `None` for the default mode
+- `GPU`: GPU index passed to `--force_gpu`; use `None` to leave it unset
+
+Example with a default cutoff, meaning six `Si-O` neighbors using the built-in cutoff:
+
+```bash
+bash multiple_runs.sh 20 log.txt 50 ./ \
+    Si-O "'Si-O':6" 0.01 0.01 True 3 2 1 huber 0
+```
+
+Example with an explicit cutoff, meaning six `Si-O` neighbors with `r_cut=2.5`:
+
+```bash
+bash multiple_runs.sh 20 log.txt 50 ./ \
+    Si-O "'Si-O':[6, 2.5]" 0.01 0.01 True 3 2 1 huber 0
+```
+
+Each run writes to a numbered directory under `results/`. At the end, the script appends all `generated_crystals.extxyz` files into `${BASE}results/${SYS}_f/generated_crystals${SUF}.extxyz` and records per-run durations in `durations.txt`. The script currently tries to activate `../.venv`; adjust that path if your MatterGen environment lives elsewhere.
+
+### 🔮 Mean-Coordination Objective
+
+```bash
+--guidance="{'mean_coordination': {
   'mode': 'huber',
   'Cu-P': [4, 2.6],
   'Cu-Cu': [0, 2.9],
@@ -66,7 +107,7 @@ You can guide generation using one or more objectives. Each is passed via the `-
 ```
 
 - `mode`: can be `l1`, `l2`, or `huber`
-- `A-B`: `[target_coordination, cutoff_radius]` 
+- `A-B`: `[target_CN, cutoff_radius]`
 - `A-B`: `int`; in this case the cutoff radius used is the sum of the covalent radii
 - `A-[B,C,D]`: targets the total coordination of `A` by any species in the set.
   If no cutoff is supplied, the cutoff is the maximum default cutoff over all `A-B`,
@@ -94,7 +135,7 @@ You can guide generation using one or more objectives. Each is passed via the `-
 ### 📊 Combine Multiple Objectives
 
 ```bash
---guidance="{'energy': None, 'environment': {'mode': 'l1', 'Li-O': [4, 2.5]}, 'volume': 75.0}"
+--guidance="{'energy': None, 'mean_coordination': {'mode': 'l1', 'Li-O': [4, 2.5]}, 'volume': 75.0}"
 ```
 
 ---

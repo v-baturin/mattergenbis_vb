@@ -16,7 +16,7 @@ if [[ "$1" == "--help" ]]; then
     echo "  NB   : Number of samples per run (default: 20)"
     echo "  LOG  : Log file name (default: log2.txt)"
     echo "  MUL  : Number of runs (default: 50)"
-    echo "  BASE : Base directory for results (default: /Data/auguste.de-lambilly/mattergenbis/)"
+    echo "  BASE : Base directory for results (default: ./)"
     echo "  SYS  : System to generate "
     echo "  ENV  : Environment conditions for the system (default: 'Co-O':3)"
     echo "  R    : Self-recursion steps (default: 3)"
@@ -29,7 +29,7 @@ if [[ "$1" == "--help" ]]; then
     echo "  MOD  : Mode for the environment loss (default: None which means l1)"
     echo ""
     echo "Example:"
-    echo " bash multiple_runs.sh 20 log.txt 50 /Data/auguste.de-lambilly/mattergenbis/ Li-Co-O \"'Co-O':6\" 0.0001 0.0001 True 3 2 1 huber 0"
+    echo " bash multiple_runs.sh 20 log.txt 50 ./ Li-Co-O \"'Co-O':6\" 0.0001 0.0001 True 3 2 1 huber 0"
     exit 0
 fi
 
@@ -37,7 +37,7 @@ fi
 NB=${1:-20}
 LOG=${2:-log2.txt}
 MUL=${3:-50}
-BASE=${4:-/Data/auguste.de-lambilly/mattergenbis/}
+BASE=${4:-./}
 SYS=${5:-Li-Co-O}
 ENV=${6:-"'Co-O':3"}
 G=${7:-1.0}
@@ -115,7 +115,6 @@ for X in $(seq 1 "$MUL"); do
 done
 
 main_file="${BASE}results/${SYS}_f/generated_crystals${SUF}.extxyz"
-hard_save="/users/eleves-b/2021/auguste.de-lambilly/results/${SYS}_f/generated_crystals${SUF}.extxyz"
 
 
 # Create the main file if it doesn't exist
@@ -127,23 +126,14 @@ if [ ! -f "$main_file" ]; then
     touch "$main_file"
 fi
 
-if [ ! -f "$hard_save" ]; then
-    echo "Creating main file $hard_save."
-    if [ ! -d "$(dirname "$hard_save")" ]; then
-        mkdir -p "$(dirname "$hard_save")"
-    fi
-    touch "$hard_save"
-fi
-
 # Save durations to durations.txt
-durations_file="$(dirname "$hard_save")/durations.txt"
+durations_file="$(dirname "$main_file")/durations.txt"
 echo "$durations" >> "$durations_file"
 
 for X in $(seq 1 "$MUL"); do
     src="${BASE}${DIR}${X}/generated_crystals.extxyz"
     if [ -f "$src" ]; then
         cat "$src" >> "$main_file"
-        cat "$src" >> "$hard_save"
     else
         echo "Warning: $src does not exist, skipping."
     fi

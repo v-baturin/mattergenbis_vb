@@ -4,23 +4,23 @@ if [[ "$1" == "--help" ]]; then
     echo ""
     echo "Arguments:"
     echo "  MUL  : Number of runs (default: 50)"
-    echo "  BASE : Base directory for results (default: /Data/auguste.de-lambilly/mattergenbis/)"
+    echo "  BASE : Base directory for results (default: /path/to/mattergenbis/)"
     echo "  SYS  : System to generate (default: Li-Co-O)"
     echo "  SUF  : Suffix for the results directory (default: _guided_env3_3-2)"
     echo ""
     echo "Example:"
-    echo "  ./copy.sh 50 /Data/auguste.de-lambilly/mattergenbis/ Li-Co-O _guided_env3_3-2_"
+    echo "  ./copy.sh 50 /path/to/mattergenbis/ Li-Co-O _guided_env3_3-2_"
     exit 0
 fi
 
 # Default values for parameters
 MUL=${1:-50}
-BASE=${2:-/Data/auguste.de-lambilly/mattergenbis/}
+BASE=${2:-/path/to/mattergenbis/}
 SYS=${3:Li-Co-O}
 SUF=${4:-_guided_env3_3-2}
 
 main_file="${BASE}results/${SYS}_f/generated_crystals${SUF}.extxyz"
-hard_save="/users/eleves-b/2021/auguste.de-lambilly/results/${SYS}_f/generated_crystals${SUF}.extxyz"
+hard_save="/path/to/results-root/results/${SYS}_f/generated_crystals${SUF}.extxyz"
 
 if [ ! -f "$main_file" ]; then
     echo "Creating main file $main_file."
