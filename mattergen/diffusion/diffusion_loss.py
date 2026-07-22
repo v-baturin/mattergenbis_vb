@@ -16,6 +16,7 @@ target_values = None
 r_cuts = None
 target_tensor = None
 shifts = None
+DEFAULT_COORDINATION_ALPHA = 2.0
 
 def clear_globals():
     global PDIAG, calc, converter, species_pairs, target_values, r_cuts, target_tensor
@@ -80,19 +81,62 @@ def volume_pa_loss(x, t, target):
 
 # --- Shared per-A soft neighbor counts (PBC, 27 images) ---
 def _as_atomic_number_tuple(
-    type_B: int | list[int] | tuple[int, ...] | set[int],
+    atomic_numbers: int | list[int] | tuple[int, ...] | set[int],
 ) -> tuple[int, ...]:
-    """Normalize one or more neighbor atomic numbers to a de-duplicated tuple."""
-    if isinstance(type_B, torch.Tensor):
-        values = type_B.detach().cpu().reshape(-1).tolist()
-    elif isinstance(type_B, (list, tuple, set)):
-        values = list(type_B)
+    """Normalize one or more atomic numbers to a de-duplicated tuple."""
+    if isinstance(atomic_numbers, torch.Tensor):
+        values = atomic_numbers.detach().cpu().reshape(-1).tolist()
+    elif isinstance(atomic_numbers, (list, tuple, set)):
+        values = list(atomic_numbers)
     else:
-        values = [type_B]
+        values = [atomic_numbers]
     return tuple(dict.fromkeys(int(v) for v in values))
 
 
-def _parse_coordination_constraint(species_constraint: str) -> tuple[int, tuple[int, ...]]:
+def _validate_one_sided_coordination_groups(
+    type_As: tuple[int, ...], type_Bs: tuple[int, ...]
+) -> None:
+    if len(type_As) > 1 and len(type_Bs) > 1:
+        raise ValueError(
+            "Coordination groups are supported on only one side: use either "
+            "'A-[B1,B2]' or '[A1,A2]-B'."
+        )
+
+
+def _parse_species_group(
+    species: str,
+    *,
+    species_constraint: str,
+    side: str,
+    allow_unbracketed_group: bool = False,
+) -> tuple[int, ...]:
+    """Parse one side of a coordination constraint into atomic numbers."""
+    species = species.strip()
+    is_bracketed = species.startswith("[") and species.endswith("]")
+    has_bracket = "[" in species or "]" in species
+
+    if has_bracket and not is_bracketed:
+        raise ValueError(f"Malformed {side} species group in {species_constraint}.")
+
+    if is_bracketed:
+        species = species[1:-1]
+    elif "," in species and not allow_unbracketed_group:
+        raise ValueError(
+            f"Grouped {side} species in {species_constraint} must be enclosed in brackets."
+        )
+
+    symbols = [symbol.strip() for symbol in species.split(",") if symbol.strip()]
+    if not symbols:
+        raise ValueError(
+            f"Invalid {side} species group in {species_constraint}. Expected at least one element."
+        )
+
+    return _as_atomic_number_tuple(tuple(Element(symbol).Z for symbol in symbols))
+
+
+def _parse_coordination_constraint(
+    species_constraint: str,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
     """
     Parse coordination keys.
 
@@ -100,6 +144,9 @@ def _parse_coordination_constraint(species_constraint: str) -> tuple[int, tuple[
       A-B
       A-[B,C,D]
       A-B,C,D
+      [A,B,C]-D
+
+    At least one side must contain exactly one species.
     """
     if "-" not in species_constraint:
         raise ValueError(f"Invalid species pair format: {species_constraint}. Expected 'A-B'.")
@@ -111,24 +158,32 @@ def _parse_coordination_constraint(species_constraint: str) -> tuple[int, tuple[
     if not species_A or not species_B:
         raise ValueError(f"Invalid species pair format: {species_constraint}. Expected 'A-B'.")
 
-    if species_B.startswith("[") and species_B.endswith("]"):
-        species_B = species_B[1:-1]
+    type_As = _parse_species_group(
+        species_A,
+        species_constraint=species_constraint,
+        side="central",
+    )
+    type_Bs = _parse_species_group(
+        species_B,
+        species_constraint=species_constraint,
+        side="neighbor",
+        allow_unbracketed_group=True,
+    )
+    _validate_one_sided_coordination_groups(type_As, type_Bs)
+    return type_As, type_Bs
 
-    species_B_symbols = [symbol.strip() for symbol in species_B.split(",") if symbol.strip()]
-    if not species_B_symbols:
-        raise ValueError(
-            f"Invalid neighbor species set in {species_constraint}. Expected at least one element."
-        )
 
-    type_A = Element(species_A).Z
-    type_Bs = tuple(Element(symbol).Z for symbol in species_B_symbols)
-    return type_A, _as_atomic_number_tuple(type_Bs)
-
-
-def _default_coordination_r_cut(type_A: int, type_Bs: tuple[int, ...]) -> float:
-    """Use the largest default pair cutoff for an A-neighbor-set constraint."""
+def _default_coordination_r_cut(
+    type_A: int | list[int] | tuple[int, ...] | set[int],
+    type_B: int | list[int] | tuple[int, ...] | set[int],
+) -> float:
+    """Use the largest default pair cutoff across the coordination constraint."""
+    type_As = _as_atomic_number_tuple(type_A)
+    type_Bs = _as_atomic_number_tuple(type_B)
     return max(
-        INTER_ATOMIC_CUTOFF[type_A] + INTER_ATOMIC_CUTOFF[type_B] + 0.5 for type_B in type_Bs
+        INTER_ATOMIC_CUTOFF[type_A_i] + INTER_ATOMIC_CUTOFF[type_B_i] + 0.5
+        for type_A_i in type_As
+        for type_B_i in type_Bs
     )
 
 
@@ -136,30 +191,34 @@ def _soft_neighbor_counts_per_A_single(
     cell: torch.Tensor,
     frac: torch.Tensor,
     types,                     # accepts numpy or torch
-    type_A: int,
+    type_A: int | list[int] | tuple[int, ...] | set[int],
     type_B: int | list[int] | tuple[int, ...] | set[int],
     kernel: str = "sigmoid",
     sigma: float = 1.0,
     r_cut: float | None = None,
-    alpha: float = 8.0,
+    alpha: float = DEFAULT_COORDINATION_ALPHA,
     **kwargs
 ) -> torch.Tensor:
     """
     Returns a differentiable vector C (n_A,) of soft B-neighbor counts for each A atom:
         C_i = sum_{j in A_B} g(d_ij), with 27 PBC images.
-    `type_B` may be a single atomic number or a set/list/tuple of atomic numbers.
+    `type_A` and `type_B` may be atomic numbers or collections of atomic numbers.
     Kernel: 'gaussian' (exp[-(d/sigma)^2]) or 'sigmoid' (sigmoid(alpha*(r_cut-d))).
-    If A is included in B, subtract 1.0 per A (legacy parity).
+    If a central atom's type is included in B, subtract its self-interaction.
     """
     # Normalize inputs to torch on the same device/dtype (keeps grad from frac if it has one)
     frac = torch.as_tensor(frac, dtype=getattr(frac, "dtype", torch.float32),
                            device=getattr(frac, "device", None))
     cell = torch.as_tensor(cell, dtype=frac.dtype, device=frac.device)
     types = torch.as_tensor(types, dtype=torch.int64, device=frac.device)
+    type_As = _as_atomic_number_tuple(type_A)
     type_Bs = _as_atomic_number_tuple(type_B)
+    _validate_one_sided_coordination_groups(type_As, type_Bs)
 
     device = frac.device
-    mask_A = (types == type_A)
+    mask_A = torch.zeros_like(types, dtype=torch.bool)
+    for type_A_i in type_As:
+        mask_A = mask_A | (types == type_A_i)
     mask_B = torch.zeros_like(mask_A, dtype=torch.bool)
     for type_B_i in type_Bs:
         mask_B = mask_B | (types == type_B_i)
@@ -172,7 +231,7 @@ def _soft_neighbor_counts_per_A_single(
 
     if r_cut is None:
         # chemistry-informed default
-        r_cut = _default_coordination_r_cut(type_A, type_Bs)
+        r_cut = _default_coordination_r_cut(type_As, type_Bs)
 
     # PBC 27 images
     global shifts
@@ -205,9 +264,12 @@ def _soft_neighbor_counts_per_A_single(
 
     counts = G.sum(dim=1)  # (n_A,)
 
-    # Remove self-interaction per A if A is part of the neighbor set.
-    if int(type_A) in type_Bs:
-        counts = counts - 1.0
+    # Remove self-interaction only for centers whose type is in the neighbor set.
+    center_types = types[idx_A]
+    self_interaction = torch.zeros_like(center_types, dtype=torch.bool)
+    for type_B_i in type_Bs:
+        self_interaction = self_interaction | (center_types == type_B_i)
+    counts = counts - self_interaction.to(dtype=counts.dtype)
 
     return counts
 
@@ -217,7 +279,7 @@ def _compute_target_coordination_share_single(
     cell: torch.Tensor,
     frac: torch.Tensor,
     types: torch.Tensor,
-    type_A: int,
+    type_A: int | list[int] | tuple[int, ...] | set[int],
     type_B: int | list[int] | tuple[int, ...] | set[int],
     *,
     target: float,
@@ -225,7 +287,7 @@ def _compute_target_coordination_share_single(
     kernel: str = "sigmoid",
     sigma: float = 1.0,
     r_cut: float | None = None,
-    alpha: float = 8.0,
+    alpha: float = DEFAULT_COORDINATION_ALPHA,
 ) -> torch.Tensor:
     """
     share = (1/|A|) * sum_i exp(- ((C_i - target)/tau)^2 ), where C_i are soft counts.
@@ -245,7 +307,7 @@ def compute_target_coordination_share(
     frac: torch.Tensor,           # (B, N, 3) or (N, 3)
     atomic_numbers: torch.Tensor, # (sumN_i,)
     num_atoms: torch.Tensor,      # (B,)
-    type_A: int,
+    type_A: int | list[int] | tuple[int, ...] | set[int],
     type_B: int | list[int] | tuple[int, ...] | set[int],
     *,
     target: float,
@@ -253,7 +315,7 @@ def compute_target_coordination_share(
     kernel: str = "sigmoid",
     sigma: float = 1.0,
     r_cut: float | None = None,
-    alpha: float = 8.0,
+    alpha: float = DEFAULT_COORDINATION_ALPHA,
 ) -> torch.Tensor:
     """
     Batched share metric. Returns (B,) if batched, scalar if single.
@@ -291,7 +353,7 @@ def target_coordination_share_loss(
     target: dict,
     kernel: str = "sigmoid",
     sigma: float = 1.0,
-    alpha: float = 8.0,
+    alpha: float = DEFAULT_COORDINATION_ALPHA,
     default_tau: float = 0.5,
 ) -> torch.Tensor:
     """
@@ -299,10 +361,12 @@ def target_coordination_share_loss(
     where share_A(k; B) is computed with a Gaussian window of width `tau` in coordination space.
 
     `target` can be:
+      {'alpha': 3.0, 'A-B': k}
       {'A-B': k}
       {'A-B': [k, r_cut]}
       {'A-B': [k, r_cut, tau]}
       {'A-[B,C,D]': k}
+      {'[A,B,C]-D': k}
     """
     if not isinstance(x, ChemGraph):
         raise ValueError("x must be a ChemGraph object")
@@ -314,10 +378,11 @@ def target_coordination_share_loss(
     frac = x.pos
     atomic_numbers = x.atomic_numbers
     num_atoms = x.num_atoms
+    alpha = float(target.get("alpha", alpha))
 
     shares = []
     for species_pair, val in target.items():
-        if species_pair == "mode":
+        if species_pair in {"mode", "alpha"}:
             continue
 
         if isinstance(val, (list, tuple)):
@@ -327,11 +392,11 @@ def target_coordination_share_loss(
         else:
             tgt = float(val); rcut = None; tau = default_tau
 
-        ZA, ZBs = _parse_coordination_constraint(species_pair)
+        ZAs, ZBs = _parse_coordination_constraint(species_pair)
 
         sh = compute_target_coordination_share(
             cell=cell, frac=frac, atomic_numbers=atomic_numbers, num_atoms=num_atoms,
-            type_A=ZA, type_B=ZBs,
+            type_A=ZAs, type_B=ZBs,
             target=tgt, tau=tau, kernel=kernel, sigma=sigma, r_cut=rcut, alpha=alpha
         )  # (B,)
         shares.append(sh)
@@ -361,19 +426,20 @@ def compute_mean_coordination(
         frac: torch.Tensor,  # (B, N, 3) or (N, 3)
         atomic_numbers: torch.Tensor,  # (\Sum N_i)
         num_atoms: torch.Tensor,  # (B,)
-        type_A: int,
+        type_A: int | list[int] | tuple[int, ...] | set[int],
         type_B: int | list[int] | tuple[int, ...] | set[int],
         kernel: str = "sigmoid",
         sigma: float = 1.0,
         r_cut: float | None = None,
-        alpha: float = 8.0,
+        alpha: float = DEFAULT_COORDINATION_ALPHA,
 ) -> torch.Tensor:
     """
     Batched mean A–B soft coordination:
        mean_i sum_j g(d_ij), using `_soft_neighbor_counts_per_A_single`.
-    `type_B` may also be a collection of neighbor atomic numbers; those species are
-    counted together using one cutoff. If `r_cut` is omitted, the cutoff is the
-    maximum default cutoff over all A-B pairs in the collection.
+    Either `type_A` or `type_B` may be a collection of atomic numbers. Grouped
+    centers are pooled before taking the mean. A grouped neighbor set is counted
+    together using one cutoff. If `r_cut` is omitted, the cutoff is the maximum
+    default cutoff over all pairs in the constraint.
     Returns: (B,) if batched, scalar if single.
     """
     # Normalize to batched
@@ -410,11 +476,12 @@ def mean_coordination_loss(
         target: dict,
         kernel: str = "sigmoid",
         sigma: float = 1.0,
-        alpha: float = 8.0
+        alpha: float = DEFAULT_COORDINATION_ALPHA,
 ) -> torch.Tensor:
     """
     Computes the mean pair- or group-coordination loss for a given ChemGraph.
-    Example of target: {'O-H': 1, 'O-C': [1,2.0], 'C-C': 2, 'H-[Pd,Ni,Pt]': 3}
+    Example of target: {'alpha': 3.0, 'O-H': 1, 'O-C': [1,2.0], 'C-C': 2,
+                        'H-[Pd,Ni,Pt]': 3, '[H,C]-O': 2}
     Meaning that the environment of O should have 1 H and 1 C but with a r_cut
     of 2.0 for C, the environment of C should have 2 C, and H should have a
     total of 3 Pd/Ni/Pt neighbors.
@@ -447,8 +514,11 @@ def mean_coordination_loss(
 
     # Extract mode without mutating the user-provided target dictionary.
     mode = target.get("mode", None)
+    alpha = float(target.get("alpha", alpha))
     constraints = [
-        (species_pair, val) for species_pair, val in target.items() if species_pair != "mode"
+        (species_pair, val)
+        for species_pair, val in target.items()
+        if species_pair not in {"mode", "alpha"}
     ]
     f_AB_list = []
     target_values = []
@@ -456,14 +526,14 @@ def mean_coordination_loss(
     for species_pair, val in constraints:
         target_values.append(val[0] if isinstance(val, (list, tuple)) else val)
         r_cut = val[1] if isinstance(val, (list, tuple)) and len(val) > 1 else None
-        type_A, type_Bs = _parse_coordination_constraint(species_pair)
+        type_As, type_Bs = _parse_coordination_constraint(species_pair)
         f_AB_list.append(
             compute_mean_coordination(
                 cell=cell,
                 frac=frac,
                 atomic_numbers=atomic_numbers,
                 num_atoms=num_atoms,
-                type_A=type_A,
+                type_A=type_As,
                 type_B=type_Bs,
                 kernel=kernel,
                 sigma=sigma,
@@ -511,12 +581,12 @@ def environment_loss(*args, **kwargs) -> torch.Tensor:
 
 
 def group_coordination_loss(*args, **kwargs) -> torch.Tensor:
-    """Alias for mean_coordination_loss with grouped neighbor-set keys."""
+    """Alias for mean_coordination_loss with one-sided species-group keys."""
     return mean_coordination_loss(*args, **kwargs)
 
 
 def group_target_coordination_loss(*args, **kwargs) -> torch.Tensor:
-    """Alias for target_coordination_loss with grouped neighbor-set keys."""
+    """Alias for target_coordination_loss with one-sided species-group keys."""
     return target_coordination_loss(*args, **kwargs)
 
 
