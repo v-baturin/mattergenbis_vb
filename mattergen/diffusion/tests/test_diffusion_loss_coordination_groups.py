@@ -5,6 +5,9 @@ from pymatgen.core import Element
 from mattergen.common.data.chemgraph import ChemGraph
 from mattergen.diffusion.diffusion_loss import (
     DEFAULT_COORDINATION_ALPHA,
+    DEFAULT_COORDINATION_MARGIN,
+    DEFAULT_COORDINATION_MODE,
+    DEFAULT_COORDINATION_TEMPERATURE,
     INTER_ATOMIC_CUTOFF,
     compute_mean_coordination,
     compute_target_share,
@@ -15,6 +18,9 @@ from mattergen.diffusion.diffusion_loss import (
 
 def test_default_coordination_alpha_is_two() -> None:
     assert DEFAULT_COORDINATION_ALPHA == 2.0
+    assert DEFAULT_COORDINATION_MODE == "soft_count"
+    assert DEFAULT_COORDINATION_MARGIN == 0.05
+    assert DEFAULT_COORDINATION_TEMPERATURE == 0.10
 
 
 def _group_coordination_system() -> ChemGraph:
@@ -61,6 +67,160 @@ def _grouped_center_system() -> ChemGraph:
         atomic_numbers=atomic_numbers,
         num_atoms=torch.tensor([len(atomic_numbers)]),
     )
+
+
+def _kth_neighbor_system(
+    oxygen_distances: tuple[float, ...] = (1.0, 2.0, 4.0),
+    *,
+    requires_grad: bool = False,
+) -> ChemGraph:
+    cell = torch.eye(3).unsqueeze(0) * 10.0
+    frac = torch.tensor(
+        [[0.0, 0.0, 0.0]]
+        + [[distance / 10.0, 0.0, 0.0] for distance in oxygen_distances],
+        dtype=torch.float32,
+        requires_grad=requires_grad,
+    )
+    atomic_numbers = torch.tensor(
+        [Element("Co").Z] + [Element("O").Z] * len(oxygen_distances),
+        dtype=torch.long,
+    )
+    return ChemGraph(
+        cell=cell,
+        pos=frac,
+        atomic_numbers=atomic_numbers,
+        num_atoms=torch.tensor([len(atomic_numbers)]),
+    )
+
+
+def test_kth_neighbor_mode_matches_two_softplus_terms() -> None:
+    x = _kth_neighbor_system()
+    margin = 0.1
+    temperature = 0.2
+    actual = compute_mean_coordination(
+        cell=x.cell,
+        frac=x.pos,
+        atomic_numbers=x.atomic_numbers,
+        num_atoms=x.num_atoms,
+        type_A=Element("Co").Z,
+        type_B=Element("O").Z,
+        coordination_mode="kth_neighbor",
+        target=2,
+        r_cut=2.5,
+        margin=margin,
+        temperature=temperature,
+    )
+    d_k = torch.tensor(2.0)
+    d_k_plus_1 = torch.tensor(4.0)
+    expected = temperature * torch.nn.functional.softplus(
+        (d_k - (2.5 - margin)) / temperature
+    ) + temperature * torch.nn.functional.softplus(
+        ((2.5 + margin) - d_k_plus_1) / temperature
+    )
+
+    torch.testing.assert_close(actual, expected.unsqueeze(0))
+
+
+def test_existing_losses_switch_to_same_kth_neighbor_objective() -> None:
+    x = _kth_neighbor_system()
+    target = {
+        "coordination_mode": "kth_neighbor",
+        "margin": 0.1,
+        "temperature": 0.2,
+        "Co-O": [2, 2.5],
+    }
+    expected = compute_mean_coordination(
+        cell=x.cell,
+        frac=x.pos,
+        atomic_numbers=x.atomic_numbers,
+        num_atoms=x.num_atoms,
+        type_A=Element("Co").Z,
+        type_B=Element("O").Z,
+        coordination_mode="kth_neighbor",
+        target=2,
+        r_cut=2.5,
+        margin=0.1,
+        temperature=0.2,
+    )
+
+    torch.testing.assert_close(
+        mean_coordination_loss(x, t=None, target=target),
+        expected,
+    )
+    torch.testing.assert_close(
+        target_coordination_loss(x, t=None, target=target),
+        expected,
+    )
+
+
+def test_kth_neighbor_gradients_pull_and_push_only_boundary_neighbors() -> None:
+    undercoordinated = _kth_neighbor_system(
+        oxygen_distances=(1.0, 3.0, 4.0),
+        requires_grad=True,
+    )
+    under_loss = mean_coordination_loss(
+        undercoordinated,
+        t=None,
+        target={
+            "coordination_mode": "kth_neighbor",
+            "margin": 0.1,
+            "temperature": 0.1,
+            "Co-O": [2, 2.0],
+        },
+    )
+    under_loss.sum().backward()
+    assert undercoordinated.pos.grad[2, 0] > 0.0
+
+    overcoordinated = _kth_neighbor_system(
+        oxygen_distances=(1.0, 1.5, 4.0),
+        requires_grad=True,
+    )
+    over_loss = mean_coordination_loss(
+        overcoordinated,
+        t=None,
+        target={
+            "coordination_mode": "kth_neighbor",
+            "margin": 0.1,
+            "temperature": 0.1,
+            "Co-O": [1, 2.0],
+        },
+    )
+    over_loss.sum().backward()
+    assert overcoordinated.pos.grad[2, 0] < 0.0
+    torch.testing.assert_close(
+        overcoordinated.pos.grad[3],
+        torch.zeros_like(overcoordinated.pos.grad[3]),
+    )
+
+
+def test_kth_neighbor_mode_supports_zero_coordination_target() -> None:
+    x = _kth_neighbor_system(requires_grad=True)
+    loss = mean_coordination_loss(
+        x,
+        t=None,
+        target={
+            "coordination_mode": "kth_neighbor",
+            "Co-O": [0, 2.0, 0.1, 0.1],
+        },
+    )
+    loss.sum().backward()
+
+    assert x.pos.grad[1, 0] < 0.0
+    torch.testing.assert_close(x.pos.grad[2], torch.zeros_like(x.pos.grad[2]))
+
+
+def test_kth_neighbor_mode_requires_integer_target() -> None:
+    x = _kth_neighbor_system()
+
+    with pytest.raises(ValueError, match="non-negative integer"):
+        mean_coordination_loss(
+            x,
+            t=None,
+            target={
+                "coordination_mode": "kth_neighbor",
+                "Co-O": [1.5, 2.0],
+            },
+        )
 
 
 def test_group_mean_coordination_uses_max_pair_cutoff() -> None:
