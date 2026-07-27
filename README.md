@@ -55,8 +55,14 @@ You can guide generation using one or more objectives. Each is passed via the `-
 
 ### 🔮 Mean-Coordination Objective
 
+The existing `mean_coordination` loss supports two definitions, selected by
+`coordination_mode`.
+
+#### Sigmoid-weighted coordination (default)
+
 ```bash
 --guidance="{'mean_coordination': {
+  'coordination_mode': 'soft_count',
   'mode': 'huber',
   'alpha': 3.0,
   'Cu-P': [4, 2.6],
@@ -67,10 +73,55 @@ You can guide generation using one or more objectives. Each is passed via the `-
 }}"
 ```
 
+- `coordination_mode: 'soft_count'`: optional; this is the backward-compatible
+  default.
 - `mode`: can be `l1`, `l2`, or `huber`
 - `alpha`: sigmoid steepness in inverse angstroms; optional, with a default of `2.0`
+- The loss compares the target with the mean sigmoid-weighted coordination of
+  the selected central atoms.
+
+#### k-th-neighbor boundary loss
+
+```bash
+--guidance="{'mean_coordination': {
+  'coordination_mode': 'kth_neighbor',
+  'margin': 0.05,
+  'temperature': 0.10,
+  'Co-O': [5, 2.42]
+}}"
+```
+
+For every central `Co` atom, the current periodic `Co-O` distances are sorted.
+For target coordination `k=5`, the loss pulls the fifth O neighbor inside
+`r_cut - margin` and pushes the sixth O neighbor outside `r_cut + margin`.
+The two penalties are smooth softplus functions of the selected distances.
+
+- `coordination_mode: 'kth_neighbor'`: selects the new behavior without adding
+  another registered loss name.
+- `margin`: safety interval around the cutoff in angstroms; default `0.05`.
+- `temperature`: softplus smoothing width in angstroms; default `0.10`. Smaller
+  values approach a hinge loss.
+- The resulting loss has units of angstroms, so its guidance weight is not
+  numerically equivalent to the dimensionless sigmoid-count loss weight.
+- The target coordination `k` must be a non-negative integer. For `k=0`, only
+  the nearest neighbor is pushed outside the cutoff margin.
+- `mode` and `alpha` belong to the sigmoid-weighted formulation and are ignored
+  in `kth_neighbor` mode.
+- A pair-specific override can be written as
+  `[target_CN, cutoff_radius, margin, temperature]`, for example
+  `'Co-O': [5, 2.42, 0.05, 0.10]`.
+- Sorting is differentiable with respect to the currently selected distances
+  except at exact distance ties, where the ranking changes. Autograd follows
+  the ordering returned for that step.
+- The same switch is accepted by the existing `environment`,
+  `target_coordination_share`, and `target_coordination` aliases. In
+  `kth_neighbor` mode they return the direct boundary penalty.
+
+The following pair and group syntax is shared by both modes:
+
 - `A-B`: `[target_CN, cutoff_radius]`
-- `A-B`: `int`; in this case the cutoff radius used is the sum of the covalent radii
+- `A-B`: `int`; in this case the cutoff is the sum of the covalent radii plus
+  `0.5` angstrom.
 - `A-[B,C,D]`: group environment target for `CN(A-[B,C,D])`, the total coordination of `A` by any species in the set.
   If no cutoff is supplied, the cutoff is the maximum default cutoff over all `A-B`,
   `A-C`, and `A-D` pairs.
@@ -133,6 +184,15 @@ dictionary through `--guidance-params`, for example:
 ./multiple_runs.sh \
     --guidance-type target_coordination_share \
     --guidance-params "{'Co-O':3}"
+```
+
+The complete dictionary is also the way to select the k-th-neighbor formulation
+with `multiple_runs.sh`:
+
+```bash
+./multiple_runs.sh \
+    --guidance-type mean_coordination \
+    --guidance-params "{'coordination_mode':'kth_neighbor', 'margin':0.05, 'temperature':0.10, 'Co-O':[5,2.42]}"
 ```
 
 `--guidance-params` cannot be combined with `--environment`, `--loss-mode`, or
@@ -253,7 +313,9 @@ environment, otherwise it activates `../.venv` when available or uses
 
 ## 🧩 How to Add a New Guidance Function
 
-To implement a custom guidance objective, follow these steps in the scout-matter codebase. All guidance logic is handled in `mattergen/diffusion/diffusion_loss.py`. You need to add your loss inside this file.
+The loss registry and general guidance orchestration are in
+`mattergen/diffusion/diffusion_loss.py`. Coordination-specific calculations are
+kept separately in `mattergen/diffusion/coordination_loss.py`.
 
 ### Step 1: Define Your Custom Loss
 
