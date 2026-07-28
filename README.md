@@ -138,15 +138,21 @@ The following pair and group syntax is shared by both modes:
 ### 🎯 Target-Coordination Share Objective
 
 ```bash
---guidance="{'target_coordination_share': {'alpha': 2.0, 'Co-O': [5, 2.42]}}"
+--guidance="{'target_coordination_share': {'Co-O': [5, 2.42]}}"
 ```
 
 - Guides the fraction of central atoms having the requested coordination.
 - Here, `5` is the target coordination number and `2.42` is the cutoff in
   angstroms.
-- An optional third value sets the dimensionless coordination-space width
-  `tau`, used as `exp(-((CN - target_CN) / tau)^2)`. It defaults to `0.5`;
-  smaller values require the coordination to be closer to the target.
+- First, each soft coordination number is computed with the distance sigmoid
+  `CN_i = sum_j sigmoid(alpha * (r_cut - r_ij))`; `alpha` defaults to `2.0`
+  inverse angstroms.
+- Then a Gaussian window in coordination-number space evaluates the target
+  match as `exp(-((CN_i - target_CN) / tau)^2)`. The optional third list value
+  is this dimensionless `tau`; it defaults to `0.5`.
+- `tau` is not the `sigma` of the alternative Gaussian distance kernel in the
+  low-level API. Registered guidance uses the default sigmoid distance kernel,
+  so `sigma` is unused here.
 
 ### 🏢 Volume Objective
 

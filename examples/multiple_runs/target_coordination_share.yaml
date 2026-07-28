@@ -5,7 +5,6 @@ system: Co-O
 guidance:
   type: target_coordination_share
   parameters:
-    alpha: 2.0
     Co-O: [5, 2.42]
   settings:
     forward_weight: 0.01
