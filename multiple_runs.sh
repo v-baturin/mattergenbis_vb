@@ -18,8 +18,8 @@ Core options:
                                  with any other option
 
 Generation options:
-  --forward-weight FLOAT         Forward diffusion loss weight (default: 1.0)
-  --backward-weight FLOAT        Backward diffusion loss weight (default: 1.0)
+  --forward-weight FLOAT         Forward guidance weight g (default: 1.0)
+  --backward-weight FLOAT        Backward guidance weight k (default: 1.0)
   --normalize BOOL               true or false (default: true)
   --self-rec-steps N             Self-recurrence steps (default: 3)
   --back-step N                  Back steps (default: 2)
@@ -144,12 +144,6 @@ option_names = {
     "runs": "--runs",
     "system": "--system",
     "guidance": "--guidance",
-    "forward_weight": "--forward-weight",
-    "backward_weight": "--backward-weight",
-    "normalize": "--normalize",
-    "self_rec_steps": "--self-rec-steps",
-    "back_step": "--back-step",
-    "algorithm": "--algorithm",
     "diffusion_guidance_factor": "--diffusion-guidance-factor",
     "gpu": "--gpu",
     "gpu_memory_gb": "--gpu-memory-gb",
@@ -170,15 +164,34 @@ if "guidance" not in config:
 guidance = config["guidance"]
 if not isinstance(guidance, dict):
     raise SystemExit("Error: YAML 'guidance' must be a mapping.")
-unknown_guidance = sorted(set(guidance) - {"type", "parameters"})
+unknown_guidance = sorted(set(guidance) - {"type", "parameters", "settings"})
 if unknown_guidance:
     raise SystemExit(
         f"Error: unknown YAML guidance setting(s): {', '.join(unknown_guidance)}"
     )
-if set(guidance) != {"type", "parameters"}:
-    raise SystemExit("Error: YAML 'guidance' requires exactly 'type' and 'parameters'.")
+missing_guidance = sorted({"type", "parameters"} - set(guidance))
+if missing_guidance:
+    raise SystemExit(
+        f"Error: missing YAML guidance setting(s): {', '.join(missing_guidance)}"
+    )
 if not isinstance(guidance["type"], str) or not guidance["type"]:
     raise SystemExit("Error: YAML 'guidance.type' must be a non-empty string.")
+guidance_settings = guidance.get("settings", {})
+if not isinstance(guidance_settings, dict):
+    raise SystemExit("Error: YAML 'guidance.settings' must be a mapping.")
+guidance_option_names = {
+    "forward_weight": "--forward-weight",
+    "backward_weight": "--backward-weight",
+    "normalize": "--normalize",
+    "self_rec_steps": "--self-rec-steps",
+    "back_step": "--back-step",
+    "algorithm": "--algorithm",
+}
+unknown_settings = sorted(set(guidance_settings) - set(guidance_option_names))
+if unknown_settings:
+    raise SystemExit(
+        f"Error: unknown YAML guidance.settings value(s): {', '.join(unknown_settings)}"
+    )
 
 def scalar(value):
     if isinstance(value, bool):
@@ -196,6 +209,9 @@ for key, option in option_names.items():
     value = config[key]
     if key == "guidance":
         args.extend((option, repr({value["type"]: value["parameters"]})))
+        for setting, setting_option in guidance_option_names.items():
+            if setting in guidance_settings:
+                args.extend((setting_option, scalar(guidance_settings[setting])))
     elif key == "dry_run":
         if not isinstance(value, bool):
             raise SystemExit("Error: YAML 'dry_run' must be true or false.")

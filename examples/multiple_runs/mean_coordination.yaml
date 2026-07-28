@@ -9,13 +9,14 @@ guidance:
     mode: huber
     alpha: 3.0
     "[Pd,Ni]-H": 6
+  settings:
+    forward_weight: 0.01
+    backward_weight: 0.01
+    normalize: true
+    self_rec_steps: 3
+    back_step: 2
+    algorithm: 1
 
-forward_weight: 0.01
-backward_weight: 0.01
-normalize: true
-self_rec_steps: 3
-back_step: 2
-algorithm: 1
 diffusion_guidance_factor: 2.0
 gpu: 2
 

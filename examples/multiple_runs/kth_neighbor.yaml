@@ -9,13 +9,14 @@ guidance:
     margin: 0.05
     temperature: 0.10
     Co-O: [5, 2.42]
+  settings:
+    forward_weight: 0.01
+    backward_weight: 0.01
+    normalize: true
+    self_rec_steps: 3
+    back_step: 2
+    algorithm: 1
 
-forward_weight: 0.01
-backward_weight: 0.01
-normalize: true
-self_rec_steps: 3
-back_step: 2
-algorithm: 1
 gpu: 0
 
 base_dir: ./

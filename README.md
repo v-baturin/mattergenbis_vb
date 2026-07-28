@@ -37,8 +37,8 @@ mattergen-generate "results/Li-Co-O_guided_env" \
 | `diffusion_guidance_factor`                                          | `float`                | Strength of guidance correction applied to the classifier-free diffusion when a finetuned model has been chosen  (choice for guidance : `2.0`)                           |
 | `guidance`                                                           | `dict`                 | Dictionary defining the training-free guidance  (see below)                                     |
 | `diffusion_loss_weight`                                              | `[float, float, bool]` | `[g, k, normalize]` where:                                                        |
-| └─ `g`: weight of forward guidance                                   |                        |                                                                                   |
-| └─ `k`: weight of backward guidance                                  |                        |                                                                                   |
+| └─ `g`: forward-guidance weight (`diffusion_loss_weight[0]`)          |                        |                                                                                   |
+| └─ `k`: backward-guidance weight (`diffusion_loss_weight[1]`)         |                        |                                                                                   |
 | └─ `normalize`: whether to normalize gradients in the guidance steps (recommended: `True`) |                        |                                                                                   |
 | `print_loss`                                                         | `bool`                 | Save loss values during generation                                               |
 | `self_rec_steps`                                                     | `int`                  | Number of self-recurrence steps                                                   |
@@ -191,9 +191,9 @@ The only alternative is a YAML input file:
 ```
 
 `--config` must be the only command-line option. YAML uses the long option names
-with underscores instead of hyphens. Its singular `guidance` section has exactly
-two fields: `type` selects the guidance function and `parameters` contains that
-function's target and settings:
+with underscores instead of hyphens. Its singular `guidance` section requires
+`type` and `parameters`; the optional `settings` mapping controls how that loss
+guides sampling:
 
 ```yaml
 batch_size: 22
@@ -205,14 +205,32 @@ guidance:
     mode: huber
     alpha: 3.0
     "[Pd,Ni]-H": 6
-forward_weight: 0.01
-backward_weight: 0.01
-normalize: true
-self_rec_steps: 3
-back_step: 2
-algorithm: 1
+  settings:
+    forward_weight: 0.01
+    backward_weight: 0.01
+    normalize: true
+    self_rec_steps: 3
+    back_step: 2
+    algorithm: 1
 gpu: 2
 ```
+
+The YAML reader starts with the same defaults as the CLI and replaces only
+values present in the file. Only `guidance.type` and `guidance.parameters` are
+required. The guidance execution settings are:
+
+| YAML setting | CLI option | Default | Meaning |
+| --- | --- | --- | --- |
+| `guidance.settings.forward_weight` | `--forward-weight` | `1.0` | Forward-guidance weight `g` |
+| `guidance.settings.backward_weight` | `--backward-weight` | `1.0` | Backward-guidance weight `k` |
+| `guidance.settings.normalize` | `--normalize` | `true` | Normalize each guidance gradient |
+| `guidance.settings.self_rec_steps` | `--self-rec-steps` | `3` | Self-recurrence steps |
+| `guidance.settings.back_step` | `--back-step` | `2` | Backward-guidance updates per step |
+| `guidance.settings.algorithm` | `--algorithm` | `0` | Placement of corrections in the sampling loop |
+
+Despite its name, `diffusion_guidance_factor` remains a top-level generation
+setting because it controls classifier-free conditioning, not the selected loss
+guidance.
 
 Runnable YAML examples cover every canonical guidance configuration:
 
@@ -225,8 +243,6 @@ Runnable YAML examples cover every canonical guidance configuration:
 The main non-guidance settings are:
 
 - `batch_size`, `num_batches`, `runs`, and `system`
-- `forward_weight`, `backward_weight`, and `normalize`
-- `self_rec_steps`, `back_step`, and `algorithm`
 - `diffusion_guidance_factor`, `gpu`, and `gpu_memory_gb`
 - `oom_retries`, `oom_backoff_percent`, `min_batch_size`, and `oom_wait_seconds`
 - `base_dir`, `log_file`, and `dry_run`
