@@ -138,11 +138,15 @@ The following pair and group syntax is shared by both modes:
 ### 🎯 Target-Coordination Share Objective
 
 ```bash
---guidance="{'target_coordination_share': {'alpha': 2.0, 'Co-O': [5, 2.42, 0.5]}}"
+--guidance="{'target_coordination_share': {'alpha': 2.0, 'Co-O': [5, 2.42]}}"
 ```
 
 - Guides the fraction of central atoms having the requested coordination.
-- The optional third list value is the coordination-space tolerance `tau`.
+- Here, `5` is the target coordination number and `2.42` is the cutoff in
+  angstroms.
+- An optional third value sets the dimensionless coordination-space width
+  `tau`, used as `exp(-((CN - target_CN) / tau)^2)`. It defaults to `0.5`;
+  smaller values require the coordination to be closer to the target.
 
 ### 🏢 Volume Objective
 
