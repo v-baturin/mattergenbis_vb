@@ -111,14 +111,9 @@ MIN_BATCH_SIZE=1
 OOM_WAIT_SECONDS=10
 DRY_RUN=false
 
-if [[ ${1:-} == --config || ${1:-} == --config=* ]]; then
-    if [[ $1 == --config ]]; then
-        [[ $# -eq 2 ]] || fail "--config must be used alone: ./multiple_runs.sh --config FILE"
-        CONFIG_FILE=$2
-    else
-        [[ $# -eq 1 ]] || fail "--config must be used alone: ./multiple_runs.sh --config FILE"
-        CONFIG_FILE=${1#--config=}
-    fi
+if [[ ${1:-} == --config ]]; then
+    [[ $# -eq 2 ]] || fail "--config must be used alone: ./multiple_runs.sh --config FILE"
+    CONFIG_FILE=$2
     [[ -n "$CONFIG_FILE" ]] || missing_value --config
     [[ -f "$CONFIG_FILE" ]] || fail "YAML config file not found: $CONFIG_FILE"
 
@@ -226,18 +221,33 @@ PY
         exit 2
     fi
     eval "set -- $config_args"
-elif [[ $# -gt 0 ]] && printf '%s\n' "$@" | grep -qE '^--config(=|$)'; then
-    fail "--config must be used alone: ./multiple_runs.sh --config FILE"
 fi
+
+declare -A OPTION_VARIABLES=(
+    [--runs]=RUNS
+    [--system]=SYSTEM
+    [--guidance]=GUIDANCE
+    [--batch-size]=BATCH_SIZE
+    [--num-batches]=NUM_BATCHES
+    [--diffusion-guidance-factor]=DIFFUSION_GUIDANCE_FACTOR
+    [--forward-weight]=FORWARD_WEIGHT
+    [--backward-weight]=BACKWARD_WEIGHT
+    [--normalize]=NORMALIZE
+    [--self-rec-steps]=SELF_REC_STEPS
+    [--back-step]=BACK_STEP
+    [--algorithm]=ALGORITHM
+    [--gpu-memory-gb]=GPU_MEMORY_GB
+    [--base-dir]=BASE_DIR
+    [--log-file]=LOG_FILE
+    [--oom-retries]=OOM_RETRIES
+    [--oom-backoff-percent]=OOM_BACKOFF_PERCENT
+    [--min-batch-size]=MIN_BATCH_SIZE
+    [--oom-wait-seconds]=OOM_WAIT_SECONDS
+    [--gpu]=GPU
+)
 
 while [[ $# -gt 0 ]]; do
     option=$1
-    if [[ "$option" == --*=* ]]; then
-        value=${option#*=}
-        option=${option%%=*}
-        set -- "$option" "$value" "${@:2}"
-    fi
-
     case "$option" in
         --help)
             usage
@@ -247,34 +257,18 @@ while [[ $# -gt 0 ]]; do
             DRY_RUN=true
             shift
             ;;
-        --runs|--system|--guidance|--batch-size|--num-batches|--diffusion-guidance-factor|--forward-weight|--backward-weight|--normalize|--self-rec-steps|--back-step|--algorithm|--gpu-memory-gb|--base-dir|--log-file|--oom-retries|--oom-backoff-percent|--min-batch-size|--oom-wait-seconds|--gpu)
-            [[ $# -ge 2 && -n "${2:-}" ]] || missing_value "$option"
-            value=$2
-            shift 2
-            case "$option" in
-                --runs) RUNS=$value ;;
-                --system) SYSTEM=$value ;;
-                --guidance) GUIDANCE=$value ;;
-                --batch-size) BATCH_SIZE=$value ;;
-                --num-batches) NUM_BATCHES=$value ;;
-                --diffusion-guidance-factor) DIFFUSION_GUIDANCE_FACTOR=$value ;;
-                --forward-weight) FORWARD_WEIGHT=$value ;;
-                --backward-weight) BACKWARD_WEIGHT=$value ;;
-                --normalize) NORMALIZE=$value ;;
-                --self-rec-steps) SELF_REC_STEPS=$value ;;
-                --back-step) BACK_STEP=$value ;;
-                --algorithm) ALGORITHM=$value ;;
-                --gpu-memory-gb) GPU_MEMORY_GB=$value ;;
-                --base-dir) BASE_DIR=$value ;;
-                --log-file) LOG_FILE=$value ;;
-                --oom-retries) OOM_RETRIES=$value ;;
-                --oom-backoff-percent) OOM_BACKOFF_PERCENT=$value ;;
-                --min-batch-size) MIN_BATCH_SIZE=$value ;;
-                --oom-wait-seconds) OOM_WAIT_SECONDS=$value ;;
-                --gpu) GPU=$value ;;
-            esac
+        --config)
+            fail "--config must be used alone: ./multiple_runs.sh --config FILE"
             ;;
-        --*|-*)
+        --*)
+            variable=${OPTION_VARIABLES[$option]:-}
+            [[ -n "$variable" ]] \
+                || fail "unknown option '$option'. Run './multiple_runs.sh --help' for usage."
+            [[ $# -ge 2 && -n "${2:-}" ]] || missing_value "$option"
+            printf -v "$variable" '%s' "$2"
+            shift 2
+            ;;
+        -*)
             fail "unknown option '$option'. Run './multiple_runs.sh --help' for usage."
             ;;
         *)

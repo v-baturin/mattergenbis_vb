@@ -170,7 +170,8 @@ There is one guidance interface: pass one complete, one-entry guidance dictionar
 to `--guidance`. The same dictionary format is used by `mattergen-generate`.
 The runner rejects dictionaries containing multiple guidance types. It does not
 assemble guidance from separate CLI options, and it does not accept positional
-arguments or short aliases.
+arguments or short aliases. Named options use the strict `--option value` form;
+the `--option=value` form is not accepted.
 
 For example, this generates 22 `Ni-Pd-H` structures per batch with
 `CN([Pd,Ni]-H) = 6`:
