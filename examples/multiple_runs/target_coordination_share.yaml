@@ -1,0 +1,20 @@
+batch_size: 20
+runs: 50
+system: Co-O
+
+guidance:
+  target_coordination_share:
+    alpha: 2.0
+    Co-O: [5, 2.42, 0.5]
+
+forward_weight: 0.01
+backward_weight: 0.01
+normalize: true
+self_rec_steps: 3
+back_step: 2
+algorithm: 1
+gpu: 0
+
+base_dir: ./
+log_file: log.txt
+dry_run: false

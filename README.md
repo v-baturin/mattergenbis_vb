@@ -1,6 +1,6 @@
 # 🧪 scout-matter
 
-This README explains how to use **scout-matter**, our modified version of Microsoft's MatterGen diffusion model, extended with custom **guidance functions** to bias crystal generation. These include **energy minimization**, **environment targeting**, **volume control**, and others. This functionality is entirely **training-free**: no retraining is required when adding new guidance objectives.
+This README explains how to use **scout-matter**, our modified version of Microsoft's MatterGen diffusion model, extended with custom **guidance functions** to bias crystal generation. These include **coordination targeting** and **volume control**. This functionality is entirely **training-free**: no retraining is required when adding new guidance objectives.
 
 ---
 
@@ -134,15 +134,14 @@ The following pair and group syntax is shared by both modes:
   the `B` centers.
 - Multiple atom-pair environments may be defined.
 
-### ⚛️ Energy Objective
+### 🎯 Target-Coordination Share Objective
 
 ```bash
---guidance="{'energy': None}"
+--guidance="{'target_coordination_share': {'alpha': 2.0, 'Co-O': [5, 2.42, 0.5]}}"
 ```
 
-- Any value (including `None`) is accepted.
-- Internally uses the **MatterSim** model to estimate energy.
-- Target is not fixed; the gradient guides toward lower energy regions.
+- Guides the fraction of central atoms having the requested coordination.
+- The optional third list value is the coordination-space tolerance `tau`.
 
 ### 🏢 Volume Objective
 
@@ -152,155 +151,95 @@ The following pair and group syntax is shared by both modes:
 
 - Tries to enforce a specific cell volume in Å³.
 
+### 🏢 Volume-Per-Atom Objective
+
+```bash
+--guidance="{'volume_pa': 15.0}"
+```
+
+- Tries to enforce a specific cell volume per atom in Å³.
+
 ### 📊 Combine Multiple Objectives
 
 ```bash
---guidance="{'energy': None, 'mean_coordination': {'mode': 'l1', 'Li-O': [4, 2.5]}, 'volume': 75.0}"
+--guidance="{'mean_coordination': {'mode': 'l1', 'Li-O': [4, 2.5]}, 'volume': 75.0}"
 ```
 
 ## 🔁 Multiple Guided Runs
 
 Use the repository-root `multiple_runs.sh` to repeat guided generation. This is the
 only runner implementation in the repository. It handles independent runs,
-multiple batches per run, OOM recovery, result aggregation, and both environment
-and other registered guidance functions.
+multiple batches per run, OOM recovery, and result aggregation.
 
-The environment convenience options are inserted into:
+There is one guidance interface: pass the complete top-level guidance dictionary
+to `--guidance`. The same dictionary format is used by `mattergen-generate` and
+supports single or combined objectives. The runner does not assemble guidance
+from separate type or objective-specific options, and it does not accept
+positional arguments or short aliases.
 
-```bash
---guidance="{'environment': {'mode': LOSS_MODE, 'alpha': ALPHA, ENVIRONMENT}}"
-```
-
-`--environment` is the comma-separated content of the `environment` dictionary. It may contain one pair target, for example `"'Si-O':[6, 2.5]"`, or several pair targets, for example `"'Cu-P':[4, 2.5], 'Cu-Cu':[0, 2.9]"`.
-For a group environment loss, use either `A-[B1,B2,...]` or `[A1,A2,...]-B`.
-For example, `"'B-[Fe,Nd]':6"` targets `CN(B-[Fe,Nd]) = 6`, while
-`"'[Fe,Nd]-B':6"` targets the mean `CN([Fe,Nd]-B) = 6` over all Fe and Nd centers.
-Groups on both sides, such as `[Fe,Nd]-[B,C]`, are not supported.
-
-For another registered loss, provide `--guidance-type` and a complete inner
-dictionary through `--guidance-params`, for example:
-
-```bash
-./multiple_runs.sh \
-    --guidance-type target_coordination_share \
-    --guidance-params "{'Co-O':3}"
-```
-
-The complete dictionary is also the way to select the k-th-neighbor formulation
-with `multiple_runs.sh`:
-
-```bash
-./multiple_runs.sh \
-    --guidance-type mean_coordination \
-    --guidance-params "{'coordination_mode':'kth_neighbor', 'margin':0.05, 'temperature':0.10, 'Co-O':[5,2.42]}"
-```
-
-`--guidance-params` cannot be combined with `--environment`, `--loss-mode`, or
-`--alpha`. For top-level multiobjective guidance such as `{'environment': {...},
-'energy': None}`, call `mattergen-generate` directly.
-
-```bash
-./multiple_runs.sh --help
-```
-
-Named options are recommended. The original positional interface and the former
-OOM-runner short flags are still accepted by this same file for compatibility.
-The main options are:
-
-- `--batch-size`: starting batch size; default `20`
-- `--num-batches`: batches generated inside each run; default `1`
-- `--runs`: number of independent run directories; default `50`
-- `--system`: chemical system, for example `Si-O` or `Li-Co-O`
-- `--environment`: one or more coordination targets
-- `--guidance-type` and `--guidance-params`: generic guidance configuration
-- `--forward-weight`, `--backward-weight`, and `--normalize`: diffusion loss settings
-- `--self-rec-steps`, `--back-step`, and `--algorithm`: guidance algorithm settings
-- `--loss-mode`: `l1`, `l2`, or `huber`; default `l1`
-- `--alpha`: sigmoid steepness; default `2.0`
-- `--gpu`: GPU index, or `None`; default `None`
-- `--gpu-memory-gb` and `--diffusion-guidance-factor`: generation settings
-- `--oom-retries`, `--oom-backoff-percent`, `--min-batch-size`, and
-  `--oom-wait-seconds`: OOM recovery settings
-- `--extra-arg`: append one argument to `mattergen-generate`; repeat as needed
-- `--log-file` and `--base-dir`: log and result collection locations
-- `--dry-run`: validate and print commands without launching generation
-
-On an OOM failure, the script retries the same run after changing the batch size
-to `ceil(current_batch * backoff_percent / 100)`. It stops when retries are
-exhausted or the next batch would be smaller than `--min-batch-size`. A non-OOM
-failure stops immediately. Every attempt has its own log file.
-
-Example with a default cutoff, meaning six `Si-O` neighbors using the built-in cutoff:
-
-```bash
-./multiple_runs.sh \
-    --batch-size 20 --runs 50 --system Si-O \
-    --environment "'Si-O':6" \
-    --forward-weight 0.01 --backward-weight 0.01 \
-    --algorithm 1 --loss-mode huber --gpu 0
-```
-
-Example with an explicit cutoff, meaning six `Si-O` neighbors with `r_cut=2.5`:
-
-```bash
-./multiple_runs.sh \
-    --batch-size 20 --runs 50 --system Si-O \
-    --environment "'Si-O':[6, 2.5]" \
-    --forward-weight 0.01 --backward-weight 0.01 \
-    --algorithm 1 --loss-mode huber --gpu 0
-```
-
-Example with multiple environment targets in the same run:
-
-```bash
-./multiple_runs.sh \
-    --batch-size 20 --runs 50 --system Cu-P \
-    --environment "'Cu-P':[4, 2.5], 'Cu-Cu':[0, 2.9]" \
-    --forward-weight 0.01 --backward-weight 0.01 \
-    --algorithm 1 --loss-mode huber --gpu 0
-```
-
-Example with a group environment target, meaning `CN(B-[Fe,Nd]) = 6` using the default group cutoff:
-
-```bash
-./multiple_runs.sh \
-    --batch-size 20 --runs 50 --system Fe-Nd-B \
-    --environment "'B-[Fe,Nd]':6" \
-    --forward-weight 0.01 --backward-weight 0.01 \
-    --algorithm 1 --loss-mode huber --gpu 0
-```
-
-Example with a group environment target and an explicit cutoff:
-
-```bash
-./multiple_runs.sh \
-    --batch-size 20 --runs 50 --system Fe-Nd-B \
-    --environment "'B-[Fe,Nd]':[6, 2.8]" \
-    --forward-weight 0.01 --backward-weight 0.01 \
-    --algorithm 1 --loss-mode huber --gpu 0
-```
-
-Example with grouped center species, meaning a mean `CN([Fe,Nd]-B) = 6` over
-all Fe and Nd atoms:
-
-```bash
-./multiple_runs.sh \
-    --batch-size 20 --runs 50 --system Fe-Nd-B \
-    --environment "'[Fe,Nd]-B':6" \
-    --forward-weight 0.01 --backward-weight 0.01 \
-    --algorithm 1 --loss-mode huber --gpu 0
-```
-
-Example for 22 `Ni-Pd-H` structures per batch with `CN([Pd,Ni]-H) = 6` and
-an explicit `alpha=3` override:
+For example, this generates 22 `Ni-Pd-H` structures per batch with
+`CN([Pd,Ni]-H) = 6`:
 
 ```bash
 ./multiple_runs.sh \
     --batch-size 22 --runs 50 --system Ni-Pd-H \
-    --environment "'[Pd,Ni]-H':6" \
+    --guidance "{'mean_coordination': {'mode':'huber', 'alpha':3, '[Pd,Ni]-H':6}}" \
     --forward-weight 0.01 --backward-weight 0.01 \
-    --algorithm 1 --loss-mode huber --gpu 2 --alpha 3
+    --normalize true --self-rec-steps 3 --back-step 2 \
+    --algorithm 1 --gpu 2
 ```
+
+The only alternative is a YAML input file:
+
+```bash
+./multiple_runs.sh --config examples/multiple_runs/mean_coordination.yaml
+```
+
+`--config` must be the only command-line option. YAML uses the long option names
+with underscores instead of hyphens, and `guidance` is a YAML mapping rather
+than a quoted Python dictionary:
+
+```yaml
+batch_size: 22
+runs: 50
+system: Ni-Pd-H
+guidance:
+  mean_coordination:
+    mode: huber
+    alpha: 3.0
+    "[Pd,Ni]-H": 6
+forward_weight: 0.01
+backward_weight: 0.01
+normalize: true
+self_rec_steps: 3
+back_step: 2
+algorithm: 1
+gpu: 2
+```
+
+Runnable YAML examples cover every canonical guidance configuration:
+
+- [mean coordination, including grouped species](examples/multiple_runs/mean_coordination.yaml)
+- [k-th-neighbor coordination](examples/multiple_runs/kth_neighbor.yaml)
+- [target coordination share](examples/multiple_runs/target_coordination_share.yaml)
+- [target volume](examples/multiple_runs/volume.yaml)
+- [target volume per atom](examples/multiple_runs/volume_per_atom.yaml)
+- [combined objectives](examples/multiple_runs/combined.yaml)
+
+The main non-guidance settings are:
+
+- `batch_size`, `num_batches`, `runs`, and `system`
+- `forward_weight`, `backward_weight`, and `normalize`
+- `self_rec_steps`, `back_step`, and `algorithm`
+- `diffusion_guidance_factor`, `gpu`, and `gpu_memory_gb`
+- `oom_retries`, `oom_backoff_percent`, `min_batch_size`, and `oom_wait_seconds`
+- `base_dir`, `log_file`, and `dry_run`
+
+Use `./multiple_runs.sh --help` for defaults and the corresponding CLI option
+names. On an OOM failure, the script retries the same run with
+`ceil(current_batch * oom_backoff_percent / 100)` structures per batch. It stops
+when retries are exhausted or the next batch would be smaller than
+`min_batch_size`. A non-OOM failure stops immediately.
 
 Each run writes to `run_N/` under
 `<base-dir>/results/<system>/<guidance>/<parameters>/<settings>/`. The settings

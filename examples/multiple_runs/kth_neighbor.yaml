@@ -1,0 +1,22 @@
+batch_size: 20
+runs: 50
+system: Co-O
+
+guidance:
+  mean_coordination:
+    coordination_mode: kth_neighbor
+    margin: 0.05
+    temperature: 0.10
+    Co-O: [5, 2.42]
+
+forward_weight: 0.01
+backward_weight: 0.01
+normalize: true
+self_rec_steps: 3
+back_step: 2
+algorithm: 1
+gpu: 0
+
+base_dir: ./
+log_file: log.txt
+dry_run: false

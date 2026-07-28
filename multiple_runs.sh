@@ -5,19 +5,17 @@ set -o pipefail
 usage() {
     cat <<'EOF'
 Usage:
-  ./multiple_runs.sh [OPTIONS]
+  ./multiple_runs.sh --guidance DICT [OPTIONS]
+  ./multiple_runs.sh --config FILE
 
 Core options:
   --batch-size N                 Starting batch size (default: 20)
   --num-batches N                Batches per run (default: 1)
   --runs N                       Number of independent runs (default: 50)
   --system ELEMENTS              Chemical system (default: Li-Co-O)
-  --environment TARGETS          Inner environment targets (default: 'Co-O':3)
-  --guidance-type TYPE           Guidance function (default: environment)
-  --guidance-params DICT         Complete inner guidance dictionary; overrides
-                                 --environment, --loss-mode, and --alpha
-  --loss-mode MODE               l1, l2, or huber (default: l1)
-  --alpha FLOAT                  Sigmoid steepness (default: 2.0)
+  --guidance DICT                Complete top-level guidance dictionary (required)
+  --config FILE                  Read all settings from YAML; cannot be combined
+                                 with any other option
 
 Generation options:
   --forward-weight FLOAT         Forward diffusion loss weight (default: 1.0)
@@ -29,7 +27,6 @@ Generation options:
   --diffusion-guidance-factor F  Diffusion guidance factor (default: 2.0)
   --gpu INDEX                    GPU index, or None (default: None)
   --gpu-memory-gb FLOAT          Optional GPU memory limit
-  --extra-arg ARG                Append one mattergen-generate argument; repeatable
 
 OOM recovery:
   --oom-retries N                Retries after the initial attempt (default: 30)
@@ -41,21 +38,17 @@ Output and utility options:
   --base-dir PATH                Base directory for results (default: ./)
   --log-file PATH                Combined log file (default: log2.txt)
   --dry-run                      Print commands without running MatterGen
-  -h, --help                     Show this help
-
-Environment targets may use A-[B1,B2,...] or [A1,A2,...]-B. Only one side may
-contain multiple species.
-
-Legacy interfaces are retained in this same script:
-  positional: NB LOG RUNS BASE SYS ENV G K NORM R B ALG MODE GPU [ALPHA]
-  short flags: -x -s -t -p -b -m -d -u -v -c -r -B -a -M -o -l
-               -R -O -N -W -f
+  --help                          Show this help
 
 Example:
   ./multiple_runs.sh --batch-size 22 --runs 50 --system Ni-Pd-H \
-    --environment "'[Pd,Ni]-H':6" --forward-weight 0.01 \
+    --guidance "{'mean_coordination': {'mode':'huber', 'alpha':3, '[Pd,Ni]-H':6}}" \
+    --forward-weight 0.01 \
     --backward-weight 0.01 --normalize true --self-rec-steps 3 \
-    --back-step 2 --algorithm 1 --loss-mode huber --gpu 2 --alpha 3
+    --back-step 2 --algorithm 1 --gpu 2
+
+YAML example:
+  ./multiple_runs.sh --config examples/multiple_runs/mean_coordination.yaml
 EOF
 }
 
@@ -102,18 +95,14 @@ RUNS=50
 LOG_FILE=log2.txt
 BASE_DIR=./
 SYSTEM=Li-Co-O
-ENVIRONMENT="'Co-O':3"
-GUIDANCE_TYPE=environment
-GUIDANCE_PARAMS=
+GUIDANCE=
 FORWARD_WEIGHT=1.0
 BACKWARD_WEIGHT=1.0
 NORMALIZE=True
 SELF_REC_STEPS=3
 BACK_STEP=2
 ALGORITHM=0
-LOSS_MODE=None
 GPU=None
-ALPHA=2.0
 DIFFUSION_GUIDANCE_FACTOR=2.0
 GPU_MEMORY_GB=
 OOM_RETRIES=30
@@ -121,110 +110,152 @@ OOM_BACKOFF_PERCENT=80
 MIN_BATCH_SIZE=1
 OOM_WAIT_SECONDS=10
 DRY_RUN=false
-LEGACY_FRACTION=
-LEGACY_EXTRA=
-EXTRA_ARGS=()
 
-GUIDANCE_PARAMS_SET=false
-ENVIRONMENT_OPTIONS_SET=false
+if [[ ${1:-} == --config || ${1:-} == --config=* ]]; then
+    if [[ $1 == --config ]]; then
+        [[ $# -eq 2 ]] || fail "--config must be used alone: ./multiple_runs.sh --config FILE"
+        CONFIG_FILE=$2
+    else
+        [[ $# -eq 1 ]] || fail "--config must be used alone: ./multiple_runs.sh --config FILE"
+        CONFIG_FILE=${1#--config=}
+    fi
+    [[ -n "$CONFIG_FILE" ]] || missing_value --config
+    [[ -f "$CONFIG_FILE" ]] || fail "YAML config file not found: $CONFIG_FILE"
 
-# Preserve the original root-script positional interface.
-if [[ $# -gt 0 && "$1" != -* ]]; then
-    [[ $# -le 15 ]] || fail "too many positional arguments; expected at most 15."
-    [[ $# -ge 1 ]] && BATCH_SIZE=$1
-    [[ $# -ge 2 ]] && LOG_FILE=$2
-    [[ $# -ge 3 ]] && RUNS=$3
-    [[ $# -ge 4 ]] && BASE_DIR=$4
-    [[ $# -ge 5 ]] && SYSTEM=$5
-    [[ $# -ge 6 ]] && ENVIRONMENT=$6
-    [[ $# -ge 7 ]] && FORWARD_WEIGHT=$7
-    [[ $# -ge 8 ]] && BACKWARD_WEIGHT=$8
-    [[ $# -ge 9 ]] && NORMALIZE=$9
-    [[ $# -ge 10 ]] && SELF_REC_STEPS=${10}
-    [[ $# -ge 11 ]] && BACK_STEP=${11}
-    [[ $# -ge 12 ]] && ALGORITHM=${12}
-    [[ $# -ge 13 ]] && LOSS_MODE=${13}
-    [[ $# -ge 14 ]] && GPU=${14}
-    [[ $# -ge 15 ]] && ALPHA=${15}
-    ENVIRONMENT_OPTIONS_SET=true
-    shift "$#"
-else
-    while [[ $# -gt 0 ]]; do
-        option=$1
-        if [[ "$option" == --*=* ]]; then
-            value=${option#*=}
-            option=${option%%=*}
-            set -- "$option" "$value" "${@:2}"
-        fi
+    if ! config_args=$(python3 - "$CONFIG_FILE" <<'PY'
+import shlex
+import sys
 
-        case "$option" in
-            -h|--help)
-                usage
-                exit 0
-                ;;
-            --dry-run)
-                DRY_RUN=true
-                shift
-                ;;
-            --extra-arg)
-                [[ $# -ge 2 ]] || missing_value "$option"
-                EXTRA_ARGS+=("$2")
-                shift 2
-                ;;
-            -x|--runs|-s|--system|-t|--guidance-type|-p|--guidance-params|-b|--batch-size|-m|--num-batches|-d|--diffusion-guidance-factor|-u|--forward-weight|-v|--backward-weight|-c|--normalize|-r|--self-rec-steps|-B|--back-step|-a|--algorithm|-M|--gpu-memory-gb|-o|--base-dir|-l|--log-file|-R|--oom-retries|-O|--oom-backoff-percent|-N|--min-batch-size|-W|--oom-wait-seconds|-f|--gpu|--environment|--loss-mode|--alpha|-F|--fraction|-e|--extra-args)
-                [[ $# -ge 2 && -n "${2:-}" ]] || missing_value "$option"
-                value=$2
-                shift 2
-                case "$option" in
-                    -x|--runs) RUNS=$value ;;
-                    -s|--system) SYSTEM=$value ;;
-                    -t|--guidance-type) GUIDANCE_TYPE=$value ;;
-                    -p|--guidance-params)
-                        GUIDANCE_PARAMS=$value
-                        GUIDANCE_PARAMS_SET=true
-                        ;;
-                    -b|--batch-size) BATCH_SIZE=$value ;;
-                    -m|--num-batches) NUM_BATCHES=$value ;;
-                    -d|--diffusion-guidance-factor) DIFFUSION_GUIDANCE_FACTOR=$value ;;
-                    -u|--forward-weight) FORWARD_WEIGHT=$value ;;
-                    -v|--backward-weight) BACKWARD_WEIGHT=$value ;;
-                    -c|--normalize) NORMALIZE=$value ;;
-                    -r|--self-rec-steps) SELF_REC_STEPS=$value ;;
-                    -B|--back-step) BACK_STEP=$value ;;
-                    -a|--algorithm) ALGORITHM=$value ;;
-                    -M|--gpu-memory-gb) GPU_MEMORY_GB=$value ;;
-                    -o|--base-dir) BASE_DIR=$value ;;
-                    -l|--log-file) LOG_FILE=$value ;;
-                    -R|--oom-retries) OOM_RETRIES=$value ;;
-                    -O|--oom-backoff-percent) OOM_BACKOFF_PERCENT=$value ;;
-                    -N|--min-batch-size) MIN_BATCH_SIZE=$value ;;
-                    -W|--oom-wait-seconds) OOM_WAIT_SECONDS=$value ;;
-                    -f|--gpu) GPU=$value ;;
-                    --environment)
-                        ENVIRONMENT=$value
-                        ENVIRONMENT_OPTIONS_SET=true
-                        ;;
-                    --loss-mode)
-                        LOSS_MODE=$value
-                        ENVIRONMENT_OPTIONS_SET=true
-                        ;;
-                    --alpha)
-                        ALPHA=$value
-                        ENVIRONMENT_OPTIONS_SET=true
-                        ;;
-                    -F|--fraction) LEGACY_FRACTION=$value ;;
-                    -e|--extra-args) LEGACY_EXTRA=$value ;;
-                esac
-                ;;
-            --*|-*)
-                fail "unknown option '$option'. Run './multiple_runs.sh --help' for usage."
-                ;;
-            *)
-                fail "unexpected positional argument '$option'. Do not mix positional and option forms."
-                ;;
-        esac
-    done
+import yaml
+
+path = sys.argv[1]
+try:
+    with open(path, encoding="utf-8") as stream:
+        config = yaml.safe_load(stream)
+except (OSError, yaml.YAMLError) as exc:
+    raise SystemExit(f"Error: cannot read YAML config {path!r}: {exc}")
+
+if not isinstance(config, dict):
+    raise SystemExit("Error: YAML config must contain a top-level mapping.")
+
+option_names = {
+    "batch_size": "--batch-size",
+    "num_batches": "--num-batches",
+    "runs": "--runs",
+    "system": "--system",
+    "guidance": "--guidance",
+    "forward_weight": "--forward-weight",
+    "backward_weight": "--backward-weight",
+    "normalize": "--normalize",
+    "self_rec_steps": "--self-rec-steps",
+    "back_step": "--back-step",
+    "algorithm": "--algorithm",
+    "diffusion_guidance_factor": "--diffusion-guidance-factor",
+    "gpu": "--gpu",
+    "gpu_memory_gb": "--gpu-memory-gb",
+    "oom_retries": "--oom-retries",
+    "oom_backoff_percent": "--oom-backoff-percent",
+    "min_batch_size": "--min-batch-size",
+    "oom_wait_seconds": "--oom-wait-seconds",
+    "base_dir": "--base-dir",
+    "log_file": "--log-file",
+    "dry_run": "--dry-run",
+}
+
+unknown = sorted(set(config) - set(option_names))
+if unknown:
+    raise SystemExit(f"Error: unknown YAML setting(s): {', '.join(unknown)}")
+if "guidance" not in config:
+    raise SystemExit("Error: YAML config requires a 'guidance' mapping.")
+if not isinstance(config["guidance"], dict) or not config["guidance"]:
+    raise SystemExit("Error: YAML 'guidance' must be a non-empty mapping.")
+
+def scalar(value):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "None"
+    if isinstance(value, (str, int, float)):
+        return str(value)
+    raise SystemExit(f"Error: expected a scalar YAML value, got {type(value).__name__}.")
+
+args = []
+for key, option in option_names.items():
+    if key not in config:
+        continue
+    value = config[key]
+    if key == "guidance":
+        args.extend((option, repr(value)))
+    elif key == "dry_run":
+        if not isinstance(value, bool):
+            raise SystemExit("Error: YAML 'dry_run' must be true or false.")
+        if value:
+            args.append(option)
+    else:
+        args.extend((option, scalar(value)))
+
+print(shlex.join(args))
+PY
+    ); then
+        exit 2
+    fi
+    eval "set -- $config_args"
+elif [[ $# -gt 0 ]] && printf '%s\n' "$@" | grep -qE '^--config(=|$)'; then
+    fail "--config must be used alone: ./multiple_runs.sh --config FILE"
 fi
+
+while [[ $# -gt 0 ]]; do
+    option=$1
+    if [[ "$option" == --*=* ]]; then
+        value=${option#*=}
+        option=${option%%=*}
+        set -- "$option" "$value" "${@:2}"
+    fi
+
+    case "$option" in
+        --help)
+            usage
+            exit 0
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        --runs|--system|--guidance|--batch-size|--num-batches|--diffusion-guidance-factor|--forward-weight|--backward-weight|--normalize|--self-rec-steps|--back-step|--algorithm|--gpu-memory-gb|--base-dir|--log-file|--oom-retries|--oom-backoff-percent|--min-batch-size|--oom-wait-seconds|--gpu)
+            [[ $# -ge 2 && -n "${2:-}" ]] || missing_value "$option"
+            value=$2
+            shift 2
+            case "$option" in
+                --runs) RUNS=$value ;;
+                --system) SYSTEM=$value ;;
+                --guidance) GUIDANCE=$value ;;
+                --batch-size) BATCH_SIZE=$value ;;
+                --num-batches) NUM_BATCHES=$value ;;
+                --diffusion-guidance-factor) DIFFUSION_GUIDANCE_FACTOR=$value ;;
+                --forward-weight) FORWARD_WEIGHT=$value ;;
+                --backward-weight) BACKWARD_WEIGHT=$value ;;
+                --normalize) NORMALIZE=$value ;;
+                --self-rec-steps) SELF_REC_STEPS=$value ;;
+                --back-step) BACK_STEP=$value ;;
+                --algorithm) ALGORITHM=$value ;;
+                --gpu-memory-gb) GPU_MEMORY_GB=$value ;;
+                --base-dir) BASE_DIR=$value ;;
+                --log-file) LOG_FILE=$value ;;
+                --oom-retries) OOM_RETRIES=$value ;;
+                --oom-backoff-percent) OOM_BACKOFF_PERCENT=$value ;;
+                --min-batch-size) MIN_BATCH_SIZE=$value ;;
+                --oom-wait-seconds) OOM_WAIT_SECONDS=$value ;;
+                --gpu) GPU=$value ;;
+            esac
+            ;;
+        --*|-*)
+            fail "unknown option '$option'. Run './multiple_runs.sh --help' for usage."
+            ;;
+        *)
+            fail "unexpected positional argument '$option'. Use named options or --config FILE."
+            ;;
+    esac
+done
 
 require_positive_integer --batch-size "$BATCH_SIZE"
 require_positive_integer --num-batches "$NUM_BATCHES"
@@ -241,10 +272,6 @@ require_positive_integer --oom-backoff-percent "$OOM_BACKOFF_PERCENT"
 require_number --forward-weight "$FORWARD_WEIGHT"
 require_number --backward-weight "$BACKWARD_WEIGHT"
 require_number --diffusion-guidance-factor "$DIFFUSION_GUIDANCE_FACTOR"
-require_number --alpha "$ALPHA"
-if ! awk -v alpha="$ALPHA" 'BEGIN { exit !(alpha > 0) }'; then
-    fail "--alpha expects a positive number; got '$ALPHA'."
-fi
 if [[ -n "$GPU_MEMORY_GB" ]]; then
     require_number --gpu-memory-gb "$GPU_MEMORY_GB"
 fi
@@ -253,12 +280,6 @@ case "${NORMALIZE,,}" in
     true) NORMALIZE=True ;;
     false) NORMALIZE=False ;;
     *) fail "--normalize expects true or false; got '$NORMALIZE'." ;;
-esac
-
-case "${LOSS_MODE,,}" in
-    none) LOSS_MODE=None ;;
-    l1|l2|huber) LOSS_MODE=${LOSS_MODE,,} ;;
-    *) fail "--loss-mode expects l1, l2, or huber; got '$LOSS_MODE'." ;;
 esac
 
 case "${GPU,,}" in
@@ -272,38 +293,33 @@ case "${ALGORITHM,,}" in
     *) require_nonnegative_integer --algorithm "$ALGORITHM" ;;
 esac
 
-[[ "$GUIDANCE_TYPE" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] \
-    || fail "invalid --guidance-type '$GUIDANCE_TYPE'."
+[[ -n "$GUIDANCE" ]] || fail "--guidance is required. Alternatively, use --config FILE."
+if ! GUIDANCE=$(python3 - "$GUIDANCE" <<'PY'
+import ast
+import sys
 
-if $GUIDANCE_PARAMS_SET && $ENVIRONMENT_OPTIONS_SET; then
-    fail "--guidance-params cannot be combined with --environment, --loss-mode, or --alpha."
-fi
-
-if $GUIDANCE_PARAMS_SET; then
-    [[ "$GUIDANCE_PARAMS" == \{*\} ]] \
-        || fail "--guidance-params must be a dictionary literal enclosed in braces."
-    INNER_GUIDANCE=$GUIDANCE_PARAMS
-else
-    if [[ "$LOSS_MODE" == None ]]; then
-        mode_literal=None
-    else
-        mode_literal="'$LOSS_MODE'"
-    fi
-    INNER_GUIDANCE="{'mode':$mode_literal, 'alpha':$ALPHA, $ENVIRONMENT}"
-fi
-GUIDANCE="{'$GUIDANCE_TYPE': $INNER_GUIDANCE}"
-
-if [[ -n "$LEGACY_EXTRA" ]]; then
-    read -r -a legacy_extra_args <<< "$LEGACY_EXTRA"
-    EXTRA_ARGS+=("${legacy_extra_args[@]}")
+try:
+    guidance = ast.literal_eval(sys.argv[1])
+except (SyntaxError, ValueError) as exc:
+    raise SystemExit(f"Error: --guidance must be a valid Python dictionary literal: {exc}")
+if not isinstance(guidance, dict) or not guidance:
+    raise SystemExit("Error: --guidance must be a non-empty dictionary.")
+if not all(isinstance(name, str) and name for name in guidance):
+    raise SystemExit("Error: every top-level --guidance key must be a non-empty string.")
+print(repr(guidance))
+PY
+); then
+    exit 2
 fi
 
 if [[ "$BASE_DIR" != */ ]]; then
     BASE_DIR="${BASE_DIR}/"
 fi
 
-type_tag=$(printf '%s' "$GUIDANCE_TYPE" | tr -cd 'A-Za-z0-9._-')
-param_tag=$(printf '%s' "$INNER_GUIDANCE" | tr -d "{}[]'\":, " | tr -cd 'A-Za-z0-9._+-')
+type_tag=$(python3 -c \
+    'import ast, sys; print("+".join(ast.literal_eval(sys.argv[1])))' "$GUIDANCE" \
+    | tr -cd 'A-Za-z0-9._+-')
+param_tag=$(printf '%s' "$GUIDANCE" | tr -d "{}[]'\":, " | tr -cd 'A-Za-z0-9._+-')
 [[ -n "$type_tag" ]] || type_tag=guidance
 [[ -n "$param_tag" ]] || param_tag=params
 
@@ -384,12 +400,6 @@ for ((run = 1; run <= RUNS; run++)); do
 
         if [[ -n "$GPU_MEMORY_GB" ]]; then
             command+=(--gpu_memory_gb="$GPU_MEMORY_GB")
-        fi
-        if [[ -n "$LEGACY_FRACTION" ]]; then
-            command+=(-f "$LEGACY_FRACTION")
-        fi
-        if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
-            command+=("${EXTRA_ARGS[@]}")
         fi
 
         {
