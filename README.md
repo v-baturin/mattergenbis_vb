@@ -150,9 +150,6 @@ The following pair and group syntax is shared by both modes:
 - Then a Gaussian window in coordination-number space evaluates the target
   match as `exp(-((CN_i - target_CN) / tau)^2)`. The optional third list value
   is this dimensionless `tau`; it defaults to `0.5`.
-- `tau` is not the `sigma` of the alternative Gaussian distance kernel in the
-  low-level API. Registered guidance uses the default sigmoid distance kernel,
-  so `sigma` is unused here.
 
 ### 🏢 Volume Objective
 
