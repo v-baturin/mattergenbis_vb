@@ -51,7 +51,8 @@ mattergen-generate "results/Li-Co-O_guided_env" \
 
 ## 🔍 Guidance Dictionary Format
 
-You can guide generation using one or more objectives. Each is passed via the `--guidance` argument.
+Each generation command uses one guidance objective, passed as a one-entry
+dictionary through `--guidance`.
 
 ### 🔮 Mean-Coordination Objective
 
@@ -159,23 +160,17 @@ The following pair and group syntax is shared by both modes:
 
 - Tries to enforce a specific cell volume per atom in Å³.
 
-### 📊 Combine Multiple Objectives
-
-```bash
---guidance="{'mean_coordination': {'mode': 'l1', 'Li-O': [4, 2.5]}, 'volume': 75.0}"
-```
-
 ## 🔁 Multiple Guided Runs
 
 Use the repository-root `multiple_runs.sh` to repeat guided generation. This is the
 only runner implementation in the repository. It handles independent runs,
 multiple batches per run, OOM recovery, and result aggregation.
 
-There is one guidance interface: pass the complete top-level guidance dictionary
-to `--guidance`. The same dictionary format is used by `mattergen-generate` and
-supports single or combined objectives. The runner does not assemble guidance
-from separate type or objective-specific options, and it does not accept
-positional arguments or short aliases.
+There is one guidance interface: pass one complete, one-entry guidance dictionary
+to `--guidance`. The same dictionary format is used by `mattergen-generate`.
+The runner rejects dictionaries containing multiple guidance types. It does not
+assemble guidance from separate CLI options, and it does not accept positional
+arguments or short aliases.
 
 For example, this generates 22 `Ni-Pd-H` structures per batch with
 `CN([Pd,Ni]-H) = 6`:
@@ -196,15 +191,17 @@ The only alternative is a YAML input file:
 ```
 
 `--config` must be the only command-line option. YAML uses the long option names
-with underscores instead of hyphens, and `guidance` is a YAML mapping rather
-than a quoted Python dictionary:
+with underscores instead of hyphens. Its singular `guidance` section has exactly
+two fields: `type` selects the guidance function and `parameters` contains that
+function's target and settings:
 
 ```yaml
 batch_size: 22
 runs: 50
 system: Ni-Pd-H
 guidance:
-  mean_coordination:
+  type: mean_coordination
+  parameters:
     mode: huber
     alpha: 3.0
     "[Pd,Ni]-H": 6
@@ -224,7 +221,6 @@ Runnable YAML examples cover every canonical guidance configuration:
 - [target coordination share](examples/multiple_runs/target_coordination_share.yaml)
 - [target volume](examples/multiple_runs/volume.yaml)
 - [target volume per atom](examples/multiple_runs/volume_per_atom.yaml)
-- [combined objectives](examples/multiple_runs/combined.yaml)
 
 The main non-guidance settings are:
 

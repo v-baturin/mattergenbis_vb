@@ -4,7 +4,8 @@ runs: 50
 system: Ni-Pd-H
 
 guidance:
-  mean_coordination:
+  type: mean_coordination
+  parameters:
     mode: huber
     alpha: 3.0
     "[Pd,Ni]-H": 6

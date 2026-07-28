@@ -13,7 +13,7 @@ Core options:
   --num-batches N                Batches per run (default: 1)
   --runs N                       Number of independent runs (default: 50)
   --system ELEMENTS              Chemical system (default: Li-Co-O)
-  --guidance DICT                Complete top-level guidance dictionary (required)
+  --guidance DICT                One-entry guidance dictionary (required)
   --config FILE                  Read all settings from YAML; cannot be combined
                                  with any other option
 
@@ -167,8 +167,18 @@ if unknown:
     raise SystemExit(f"Error: unknown YAML setting(s): {', '.join(unknown)}")
 if "guidance" not in config:
     raise SystemExit("Error: YAML config requires a 'guidance' mapping.")
-if not isinstance(config["guidance"], dict) or not config["guidance"]:
-    raise SystemExit("Error: YAML 'guidance' must be a non-empty mapping.")
+guidance = config["guidance"]
+if not isinstance(guidance, dict):
+    raise SystemExit("Error: YAML 'guidance' must be a mapping.")
+unknown_guidance = sorted(set(guidance) - {"type", "parameters"})
+if unknown_guidance:
+    raise SystemExit(
+        f"Error: unknown YAML guidance setting(s): {', '.join(unknown_guidance)}"
+    )
+if set(guidance) != {"type", "parameters"}:
+    raise SystemExit("Error: YAML 'guidance' requires exactly 'type' and 'parameters'.")
+if not isinstance(guidance["type"], str) or not guidance["type"]:
+    raise SystemExit("Error: YAML 'guidance.type' must be a non-empty string.")
 
 def scalar(value):
     if isinstance(value, bool):
@@ -185,7 +195,7 @@ for key, option in option_names.items():
         continue
     value = config[key]
     if key == "guidance":
-        args.extend((option, repr(value)))
+        args.extend((option, repr({value["type"]: value["parameters"]})))
     elif key == "dry_run":
         if not isinstance(value, bool):
             raise SystemExit("Error: YAML 'dry_run' must be true or false.")
@@ -304,6 +314,8 @@ except (SyntaxError, ValueError) as exc:
     raise SystemExit(f"Error: --guidance must be a valid Python dictionary literal: {exc}")
 if not isinstance(guidance, dict) or not guidance:
     raise SystemExit("Error: --guidance must be a non-empty dictionary.")
+if len(guidance) != 1:
+    raise SystemExit("Error: --guidance must define exactly one guidance type.")
 if not all(isinstance(name, str) and name for name in guidance):
     raise SystemExit("Error: every top-level --guidance key must be a non-empty string.")
 print(repr(guidance))

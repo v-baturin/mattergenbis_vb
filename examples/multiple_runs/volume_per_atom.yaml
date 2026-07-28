@@ -3,7 +3,8 @@ runs: 50
 system: Li-Co-O
 
 guidance:
-  volume_pa: 15.0
+  type: volume_pa
+  parameters: 15.0
 
 forward_weight: 0.01
 backward_weight: 0.01

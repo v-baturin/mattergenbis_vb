@@ -3,7 +3,8 @@ runs: 50
 system: Co-O
 
 guidance:
-  target_coordination_share:
+  type: target_coordination_share
+  parameters:
     alpha: 2.0
     Co-O: [5, 2.42, 0.5]
 
