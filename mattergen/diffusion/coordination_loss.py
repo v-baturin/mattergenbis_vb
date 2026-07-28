@@ -270,17 +270,14 @@ def _soft_neighbor_counts_per_A_single(
     types,                     # accepts numpy or torch
     type_A: int | list[int] | tuple[int, ...] | set[int],
     type_B: int | list[int] | tuple[int, ...] | set[int],
-    kernel: str = "sigmoid",
-    sigma: float = 1.0,
     r_cut: float | None = None,
     alpha: float = DEFAULT_COORDINATION_ALPHA,
-    **kwargs
 ) -> torch.Tensor:
     """
     Returns a differentiable vector C (n_A,) of soft B-neighbor counts for each A atom:
-        C_i = sum_{j in A_B} g(d_ij), with 27 PBC images.
+        C_i = sum_{j in A_B} sigmoid(alpha * (r_cut - d_ij)),
+        with 27 PBC images.
     `type_A` and `type_B` may be atomic numbers or collections of atomic numbers.
-    Kernel: 'gaussian' (exp[-(d/sigma)^2]) or 'sigmoid' (sigmoid(alpha*(r_cut-d))).
     If a central atom's type is included in B, subtract its self-interaction.
     """
     # Normalize inputs to torch on the same device/dtype (keeps grad from frac if it has one)
@@ -331,13 +328,7 @@ def _soft_neighbor_counts_per_A_single(
     dc = torch.matmul(d, cell)                             # (n_A, n_B*27, 3)
     dist = dc.norm(dim=-1)                                 # (n_A, n_B*27)
 
-    # Kernel
-    if kernel == "gaussian":
-        G = torch.exp(- (dist / sigma).pow(2))
-    elif kernel == "sigmoid":
-        G = torch.sigmoid(alpha * (r_cut - dist))
-    else:
-        raise ValueError("kernel must be 'gaussian' or 'sigmoid'")
+    G = torch.sigmoid(alpha * (r_cut - dist))
 
     counts = G.sum(dim=1)  # (n_A,)
 
@@ -361,8 +352,6 @@ def _compute_target_coordination_share_single(
     *,
     target: float,
     tau: float = 0.5,
-    kernel: str = "sigmoid",
-    sigma: float = 1.0,
     r_cut: float | None = None,
     alpha: float = DEFAULT_COORDINATION_ALPHA,
     coordination_mode: str = DEFAULT_COORDINATION_MODE,
@@ -395,7 +384,7 @@ def _compute_target_coordination_share_single(
         return penalties.mean()
 
     C = _soft_neighbor_counts_per_A_single(
-        cell, frac, types, type_A, type_B, kernel=kernel, sigma=sigma, r_cut=r_cut, alpha=alpha
+        cell, frac, types, type_A, type_B, r_cut=r_cut, alpha=alpha
     )
     # If empty sentinel, return as-is (0-like scalar preserving graph)
     if C.numel() == 1 and C.squeeze().abs().sum() == 0:
@@ -414,8 +403,6 @@ def compute_target_coordination_share(
     *,
     target: float,
     tau: float = 0.5,
-    kernel: str = "sigmoid",
-    sigma: float = 1.0,
     r_cut: float | None = None,
     alpha: float = DEFAULT_COORDINATION_ALPHA,
     coordination_mode: str = DEFAULT_COORDINATION_MODE,
@@ -444,8 +431,6 @@ def compute_target_coordination_share(
             type_A, type_B,
             target=target,
             tau=tau,
-            kernel=kernel,
-            sigma=sigma,
             r_cut=r_cut,
             alpha=alpha,
             coordination_mode=coordination_mode,
@@ -468,8 +453,6 @@ def target_coordination_share_loss(
     x: ChemGraph,
     t: Any,
     target: dict,
-    kernel: str = "sigmoid",
-    sigma: float = 1.0,
     alpha: float = DEFAULT_COORDINATION_ALPHA,
     default_tau: float = 0.5,
     default_margin: float = DEFAULT_COORDINATION_MARGIN,
@@ -548,8 +531,6 @@ def target_coordination_share_loss(
             type_A=ZAs, type_B=ZBs,
             target=tgt,
             tau=tau,
-            kernel=kernel,
-            sigma=sigma,
             r_cut=rcut,
             alpha=alpha,
             coordination_mode=coordination_mode,
@@ -587,8 +568,6 @@ def compute_mean_coordination(
         num_atoms: torch.Tensor,  # (B,)
         type_A: int | list[int] | tuple[int, ...] | set[int],
         type_B: int | list[int] | tuple[int, ...] | set[int],
-        kernel: str = "sigmoid",
-        sigma: float = 1.0,
         r_cut: float | None = None,
         alpha: float = DEFAULT_COORDINATION_ALPHA,
         coordination_mode: str = DEFAULT_COORDINATION_MODE,
@@ -646,8 +625,6 @@ def compute_mean_coordination(
                 atomic_numbers[count:count_],
                 type_A=type_A,
                 type_B=type_B,
-                kernel=kernel,
-                sigma=sigma,
                 r_cut=r_cut,
                 alpha=alpha,
             )
@@ -667,8 +644,6 @@ def mean_coordination_loss(
         x: ChemGraph,
         t: Any,
         target: dict,
-        kernel: str = "sigmoid",
-        sigma: float = 1.0,
         alpha: float = DEFAULT_COORDINATION_ALPHA,
         default_margin: float = DEFAULT_COORDINATION_MARGIN,
         default_temperature: float = DEFAULT_COORDINATION_TEMPERATURE,
@@ -700,10 +675,7 @@ def mean_coordination_loss(
         x (ChemGraph): The input ChemGraph.
         t (Any): Unused, but required for compatibility.
         target (dict): The species of interest and the target value for each coordination constraint.
-        kernel (str): Kernel type, either 'gaussian' or 'sigmoid'.
-        sigma (float): Width for Gaussian kernel.
-        r_cut (float | None): Cutoff for sigmoid kernel.
-        alpha (float): Sharpness for sigmoid kernel.
+        alpha (float): Sharpness of the sigmoid neighbor count.
 
     Returns:
         torch.Tensor: The computed mean coordination loss.
@@ -758,8 +730,6 @@ def mean_coordination_loss(
                 num_atoms=num_atoms,
                 type_A=type_As,
                 type_B=type_Bs,
-                kernel=kernel,
-                sigma=sigma,
                 r_cut=r_cut,
                 alpha=alpha,
                 coordination_mode=coordination_mode,
