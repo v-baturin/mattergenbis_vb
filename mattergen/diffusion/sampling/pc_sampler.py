@@ -22,50 +22,30 @@ SampleAndMean = Tuple[Diffusable, Diffusable]
 SampleAndMeanAndMaybeRecords = Tuple[Diffusable, Diffusable, list[Diffusable] | None]
 SampleAndMeanAndRecords = Tuple[Diffusable, Diffusable, list[Diffusable]]
 
-_MIN_GUIDANCE_GRAD_NORM = 1e-20
 
-
-def _normalize_gradient_per_sample(
-    grad: torch.Tensor,
+def _prepare_guidance_grad(
+    g: torch.Tensor,
     *,
     batch_idx: torch.LongTensor | None,
     batch_size: int,
+    normalize: bool,
+    threshold: float = 1e-20,
 ) -> torch.Tensor:
-    """Normalize each sample's gradient independently over all non-batch dimensions."""
-    if grad.ndim == 0:
-        raise ValueError("Guidance gradients must have at least one dimension.")
+    flat = g.reshape(g.shape[0], -1)
+    squared_norm = flat.square().sum(dim=1)
     if batch_idx is None:
-        if grad.shape[0] != batch_size:
-            raise ValueError(
-                "Dense guidance gradients must have batch size as their first dimension."
-            )
-    elif batch_idx.shape != (grad.shape[0],):
-        raise ValueError("Gradient batch indices must have one entry per gradient row.")
-
-    squared_per_row = grad.reshape(grad.shape[0], -1).square().sum(dim=1)
-    if batch_idx is None:
-        squared_per_sample = squared_per_row
-        row_to_sample = torch.arange(batch_size, device=grad.device)
+        n = squared_norm.clamp_min(threshold**2).sqrt()
     else:
-        squared_per_sample = torch.zeros(
-            batch_size, dtype=grad.dtype, device=grad.device
-        ).scatter_add(0, batch_idx, squared_per_row)
-        row_to_sample = batch_idx
+        squared_norm = torch.zeros(
+            batch_size, dtype=g.dtype, device=g.device
+        ).scatter_add(0, batch_idx, squared_norm)
+        n = squared_norm.clamp_min(threshold**2).sqrt()[batch_idx]
 
-    # Clamp before sqrt to keep higher-order derivatives finite for zero gradients.
-    tiny = torch.finfo(grad.dtype).tiny
-    norm_per_sample = squared_per_sample.clamp_min(tiny).sqrt()
-    active = squared_per_sample > _MIN_GUIDANCE_GRAD_NORM**2
-    divisor_per_sample = torch.where(
-        active, norm_per_sample, torch.ones_like(norm_per_sample)
-    )
-    divisor_per_row = divisor_per_sample[row_to_sample].reshape(
-        (grad.shape[0],) + (1,) * (grad.ndim - 1)
-    )
-    active_per_row = active[row_to_sample].reshape(
-        (grad.shape[0],) + (1,) * (grad.ndim - 1)
-    )
-    return torch.where(active_per_row, grad / divisor_per_row, torch.zeros_like(grad))
+    n = n.view(g.shape[0], *([1] * (g.ndim - 1)))
+    mask = (n > threshold).to(g.dtype)
+    if normalize:
+        g = g / n
+    return g * mask
 
 
 class PredictorCorrector(Generic[Diffusable]):
@@ -249,22 +229,15 @@ class PredictorCorrector(Generic[Diffusable]):
                 grad_dict[field] = grad
             #if grad_dict['pos'].sum() != 0 or grad_dict['cell'].sum() != 0:
             #   print(grad_dict, diffusion_loss)
-            for k, grad in grad_dict.items():
-                if k not in score:
-                    continue
-                if self.diffusion_loss_weight[2]:
-                    grad = _normalize_gradient_per_sample(
-                        grad,
-                        batch_idx=x0.get_batch_idx(k),
+            for k in grad_dict:
+                if k in score:
+                    g_scaled = _prepare_guidance_grad(
+                        grad_dict[k], batch_idx=x0.get_batch_idx(k),
                         batch_size=x0.get_batch_size(),
+                        normalize=self.diffusion_loss_weight[2],
                     )
-                elif grad.norm() <= _MIN_GUIDANCE_GRAD_NORM:
-                    continue
-                alpha_t, sigma_t = x0.alpha[k]
-                guidance_scale = (
-                    self.diffusion_loss_weight[1] * alpha_t / sigma_t.square()
-                )
-                score[k] = score[k] - guidance_scale * grad
+                    alpha_t, sigma_t = x0.alpha[k]
+                    score[k] = score[k] - self.diffusion_loss_weight[1] * alpha_t / (sigma_t**2) * g_scaled
             del grad_dict  # Clean up the gradient dictionary
             pass
 
@@ -296,18 +269,14 @@ class PredictorCorrector(Generic[Diffusable]):
             grad_dict[field] = grad
         #if grad_dict['pos'].sum() != 0 or grad_dict['cell'].sum() != 0:
         #        print(grad_dict, diffusion_loss)
-        for k, grad in grad_dict.items():
-            if k not in score:
-                continue
-            if self.diffusion_loss_weight[2]:
-                grad = _normalize_gradient_per_sample(
-                    grad,
-                    batch_idx=batch_.get_batch_idx(k),
+        for k in grad_dict:
+            if k in score:
+                g_scaled = _prepare_guidance_grad(
+                    grad_dict[k], batch_idx=batch_.get_batch_idx(k),
                     batch_size=batch_.get_batch_size(),
+                    normalize=self.diffusion_loss_weight[2],
                 )
-            elif grad.norm() <= _MIN_GUIDANCE_GRAD_NORM:
-                continue
-            score[k] = score[k] - self.diffusion_loss_weight[0] * grad
+                score[k] = score[k] - self.diffusion_loss_weight[0] * g_scaled
         del batch_  # Clean up the temporary batch with gradients
         del grad_dict  # Clean up the gradient dictionary
         pass
