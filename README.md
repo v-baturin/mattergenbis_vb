@@ -128,7 +128,9 @@ The following pair and group syntax is shared by both modes:
   `A-C`, and `A-D` pairs.
 - `[A,B,C]-D`: grouped-center target. All atoms of types `A`, `B`, and `C` are
   pooled as centers, their `D` neighbors are counted, and the mean is taken over
-  all center atoms. Species with more atoms therefore have proportionally more weight.
+  all center atoms. Species with more atoms therefore have proportionally more
+  weight. Without an explicit cutoff, each center element uses its own default
+  pair cutoff; an explicit cutoff is shared by the whole group.
 - A group may appear on only one side. Keys such as `[A,B]-[C,D]` are rejected.
 - Overlapping sides are valid. For example, `[A,B]-B` does not count a central
   `B` atom as its own neighbor; this self-interaction correction applies only to

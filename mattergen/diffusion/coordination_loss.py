@@ -126,6 +126,27 @@ def _default_coordination_r_cut(
     )
 
 
+def _coordination_r_cut_per_center(
+    center_types: torch.Tensor,
+    type_Bs: tuple[int, ...],
+    *,
+    dtype: torch.dtype,
+    r_cut: float | None,
+) -> torch.Tensor:
+    if r_cut is not None:
+        return torch.full(
+            center_types.shape, float(r_cut), dtype=dtype, device=center_types.device
+        )
+    return torch.tensor(
+        [
+            _default_coordination_r_cut(int(type_A_i), type_Bs)
+            for type_A_i in center_types.detach().cpu().tolist()
+        ],
+        dtype=dtype,
+        device=center_types.device,
+    )
+
+
 def _normalize_coordination_mode(coordination_mode: str) -> str:
     aliases = {
         "soft_count": "soft_count",
@@ -193,10 +214,6 @@ def _coordination_margin_penalties_per_A_single(
         raise ValueError("coordination margin must be non-negative.")
     if temperature <= 0.0:
         raise ValueError("coordination temperature must be positive.")
-    if r_cut is None:
-        r_cut = _default_coordination_r_cut(type_As, type_Bs)
-    r_cut = float(r_cut)
-
     mask_A = torch.zeros_like(types, dtype=torch.bool)
     for type_A_i in type_As:
         mask_A = mask_A | (types == type_A_i)
@@ -208,6 +225,10 @@ def _coordination_margin_penalties_per_A_single(
 
     if idx_A.numel() == 0 or idx_B.numel() == 0:
         return cell.sum() * frac.sum() * torch.zeros(1, device=frac.device)
+
+    r_cut_per_A = _coordination_r_cut_per_center(
+        types[idx_A], type_Bs, dtype=frac.dtype, r_cut=r_cut
+    )
 
     global shifts
     if shifts is None or shifts.device != frac.device:
@@ -252,14 +273,14 @@ def _coordination_margin_penalties_per_A_single(
         )
 
     push_extra_outside = temperature * torch.nn.functional.softplus(
-        ((r_cut + margin) - d_k_plus_1) / temperature
+        ((r_cut_per_A + margin) - d_k_plus_1) / temperature
     )
     if target_int == 0:
         return push_extra_outside
 
     d_k = ordered_distances[:, target_int - 1]
     pull_k_inside = temperature * torch.nn.functional.softplus(
-        (d_k - (r_cut - margin)) / temperature
+        (d_k - (r_cut_per_A - margin)) / temperature
     )
     return pull_k_inside + push_extra_outside
 
@@ -303,9 +324,9 @@ def _soft_neighbor_counts_per_A_single(
         # Return a scalar-zero preserving the graph
         return cell.sum()*frac.sum() * torch.zeros(1, device=device)
 
-    if r_cut is None:
-        # chemistry-informed default
-        r_cut = _default_coordination_r_cut(type_As, type_Bs)
+    r_cut_per_A = _coordination_r_cut_per_center(
+        types[idx_A], type_Bs, dtype=frac.dtype, r_cut=r_cut
+    )
 
     # PBC 27 images
     global shifts
@@ -328,7 +349,7 @@ def _soft_neighbor_counts_per_A_single(
     dc = torch.matmul(d, cell)                             # (n_A, n_B*27, 3)
     dist = dc.norm(dim=-1)                                 # (n_A, n_B*27)
 
-    G = torch.sigmoid(alpha * (r_cut - dist))
+    G = torch.sigmoid(alpha * (r_cut_per_A[:, None] - dist))
 
     counts = G.sum(dim=1)  # (n_A,)
 
@@ -583,9 +604,9 @@ def compute_mean_coordination(
     margin penalty and therefore requires an integer ``target``.
 
     Either `type_A` or `type_B` may be a collection of atomic numbers. Grouped
-    centers are pooled before taking the mean. A grouped neighbor set is counted
-    together using one cutoff. If `r_cut` is omitted, the cutoff is the maximum
-    default cutoff over all pairs in the constraint.
+    centers are pooled before taking the mean. If `r_cut` is omitted, each
+    center element uses its own default cutoff; for a grouped neighbor set this
+    is the maximum default cutoff over that center's neighbor pairs.
     Returns: (B,) if batched, scalar if single.
     """
     # Normalize to batched
