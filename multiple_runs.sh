@@ -20,7 +20,8 @@ Core options:
 Generation options:
   --forward-weight FLOAT         Forward guidance weight g (default: 1.0)
   --backward-weight FLOAT        Backward guidance weight k (default: 1.0)
-  --normalize BOOL               true or false (default: true)
+  --normalize BOOL               Normalize each structure's guidance gradient
+                                 per continuous field; true or false (default: true)
   --self-rec-steps N             Self-recurrence steps (default: 3)
   --back-step N                  Back steps (default: 2)
   --algorithm N                  Guidance algorithm (default: 0)

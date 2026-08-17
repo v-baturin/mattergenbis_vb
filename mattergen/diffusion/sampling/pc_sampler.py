@@ -23,6 +23,31 @@ SampleAndMeanAndMaybeRecords = Tuple[Diffusable, Diffusable, list[Diffusable] | 
 SampleAndMeanAndRecords = Tuple[Diffusable, Diffusable, list[Diffusable]]
 
 
+def _prepare_guidance_grad(
+    g: torch.Tensor,
+    *,
+    batch_idx: torch.LongTensor | None,
+    batch_size: int,
+    normalize: bool,
+    threshold: float = 1e-20,
+) -> torch.Tensor:
+    flat = g.reshape(g.shape[0], -1)
+    squared_norm = flat.square().sum(dim=1)
+    if batch_idx is None:
+        n = squared_norm.clamp_min(threshold**2).sqrt()
+    else:
+        squared_norm = torch.zeros(
+            batch_size, dtype=g.dtype, device=g.device
+        ).scatter_add(0, batch_idx, squared_norm)
+        n = squared_norm.clamp_min(threshold**2).sqrt()[batch_idx]
+
+    n = n.view(g.shape[0], *([1] * (g.ndim - 1)))
+    mask = (n > threshold).to(g.dtype)
+    if normalize:
+        g = g / n
+    return g * mask
+
+
 class PredictorCorrector(Generic[Diffusable]):
     """Generates samples using predictor-corrector sampling."""
 
@@ -205,9 +230,14 @@ class PredictorCorrector(Generic[Diffusable]):
             #if grad_dict['pos'].sum() != 0 or grad_dict['cell'].sum() != 0:
             #   print(grad_dict, diffusion_loss)
             for k in grad_dict:
-                if k in score and grad_dict[k].norm()>1e-20:  # Avoid too small gradients
+                if k in score:
+                    g_scaled = _prepare_guidance_grad(
+                        grad_dict[k], batch_idx=x0.get_batch_idx(k),
+                        batch_size=x0.get_batch_size(),
+                        normalize=self.diffusion_loss_weight[2],
+                    )
                     alpha_t, sigma_t = x0.alpha[k]
-                    score[k] = score[k] - self.diffusion_loss_weight[1] * alpha_t / (sigma_t**2) * (1/grad_dict[k].norm() if self.diffusion_loss_weight[2] else 1) * grad_dict[k] # + in theory ?
+                    score[k] = score[k] - self.diffusion_loss_weight[1] * alpha_t / (sigma_t**2) * g_scaled
             del grad_dict  # Clean up the gradient dictionary
             pass
 
@@ -240,8 +270,13 @@ class PredictorCorrector(Generic[Diffusable]):
         #if grad_dict['pos'].sum() != 0 or grad_dict['cell'].sum() != 0:
         #        print(grad_dict, diffusion_loss)
         for k in grad_dict:
-            if k in score and grad_dict[k].norm()>1e-20:
-                score[k] = score[k] - self.diffusion_loss_weight[0] * (1/grad_dict[k].norm() if self.diffusion_loss_weight[2] else 1) * grad_dict[k]
+            if k in score:
+                g_scaled = _prepare_guidance_grad(
+                    grad_dict[k], batch_idx=batch_.get_batch_idx(k),
+                    batch_size=batch_.get_batch_size(),
+                    normalize=self.diffusion_loss_weight[2],
+                )
+                score[k] = score[k] - self.diffusion_loss_weight[0] * g_scaled
         del batch_  # Clean up the temporary batch with gradients
         del grad_dict  # Clean up the gradient dictionary
         pass

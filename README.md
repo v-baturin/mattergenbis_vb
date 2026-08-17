@@ -40,7 +40,7 @@ mattergen-generate "results/Li-Co-O_guided_env" \
 | `diffusion_loss_weight`                                              | `[float, float, bool]` | `[g, k, normalize]` where:                                                        |
 | └─ `g`: forward-guidance weight (`diffusion_loss_weight[0]`)          |                        |                                                                                   |
 | └─ `k`: backward-guidance weight (`diffusion_loss_weight[1]`)         |                        |                                                                                   |
-| └─ `normalize`: whether to normalize gradients in the guidance steps (recommended: `True`) |                        |                                                                                   |
+| └─ `normalize`: normalize each generated structure's gradient independently for each continuous field (recommended: `True`) | | |
 | `print_loss`                                                         | `bool`                 | Save loss values during generation                                               |
 | `self_rec_steps`                                                     | `int`                  | Number of self-recurrence steps                                                   |
 | `back_step`                                                          | `int`                  | Number of backward guidance steps per backward guidance                                      |
@@ -299,7 +299,7 @@ required. The guidance execution settings are:
 | --- | --- | --- | --- |
 | `guidance.settings.forward_weight` | `--forward-weight` | `1.0` | Forward-guidance weight `g` |
 | `guidance.settings.backward_weight` | `--backward-weight` | `1.0` | Backward-guidance weight `k` |
-| `guidance.settings.normalize` | `--normalize` | `true` | Normalize each guidance gradient |
+| `guidance.settings.normalize` | `--normalize` | `true` | Normalize each structure's gradient independently per continuous field |
 | `guidance.settings.self_rec_steps` | `--self-rec-steps` | `3` | Self-recurrence steps |
 | `guidance.settings.back_step` | `--back-step` | `2` | Backward-guidance updates per step |
 | `guidance.settings.algorithm` | `--algorithm` | `0` | Placement of corrections in the sampling loop |
