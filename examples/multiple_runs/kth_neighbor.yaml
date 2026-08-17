@@ -3,9 +3,8 @@ runs: 50
 system: Co-O
 
 guidance:
-  type: mean_coordination
+  type: ranked_coordination
   parameters:
-    coordination_mode: kth_neighbor
     margin: 0.05
     temperature: 0.10
     Co-O: [5, 2.42]

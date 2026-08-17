@@ -20,6 +20,7 @@ from mattergen.diffusion.coordination_loss import (
     _validate_one_sided_coordination_groups,
     _validate_target_coordination,
     compute_mean_coordination,
+    compute_ranked_coordination,
     compute_target_coordination_share,
     compute_target_share,
     dominant_environment_loss,
@@ -27,6 +28,7 @@ from mattergen.diffusion.coordination_loss import (
     group_coordination_loss,
     group_target_coordination_loss,
     mean_coordination_loss,
+    ranked_coordination_loss,
     target_coordination_loss,
     target_coordination_share_loss,
 )
@@ -212,6 +214,7 @@ LOSS_REGISTRY: Dict[str, Callable[..., torch.Tensor]] = {
     "volume_pa": volume_pa_loss,
     "mean_coordination": mean_coordination_loss,
     "target_coordination_share": target_coordination_share_loss,
+    "ranked_coordination": ranked_coordination_loss,
     "target_coordination": target_coordination_loss,
     "group_coordination": group_coordination_loss,
     "group_target_coordination": group_target_coordination_loss,

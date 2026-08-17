@@ -6,7 +6,8 @@ This README explains how to use **scout-matter**, our modified version of Micros
 
 ## 📅 Quick Start
 
-Example to generate structures with mean-coordination guidance:
+Illustrative example using mean-coordination guidance. Replace the `Co-O` pair,
+target CN, and cutoff with values for the intended chemical system:
 
 ```bash
 mattergen-generate "results/Li-Co-O_guided_env" \
@@ -54,16 +55,31 @@ mattergen-generate "results/Li-Co-O_guided_env" \
 Each generation command uses one guidance objective, passed as a one-entry
 dictionary through `--guidance`.
 
-### 🔮 Mean-Coordination Objective
+### 🔮 Coordination Guidance
 
-The existing `mean_coordination` loss supports two definitions, selected by
-`coordination_mode`.
+A coordination-guidance configuration selects one of three objectives with its
+outer guidance key:
 
-#### Sigmoid-weighted coordination (default)
+- `mean_coordination`: match the mean sigmoid soft coordination number.
+- `target_coordination_share`: maximize the sigmoid-soft-count share at the
+  requested coordination number.
+- `ranked_coordination`: directly enforce an integer coordination target with
+  ranked-neighbor softplus boundary penalties.
+
+`mean_coordination` and `target_coordination_share` aggregate the same
+differentiable soft-count statistic in different ways. `ranked_coordination`
+assigns neighbors to the inside or outside of a cutoff according to distance
+rank. Pair and grouped-species keys provide shared constraint syntax for all
+three objectives.
+
+The chemical pairs and numerical values below illustrate configuration syntax.
+Choose the species, target coordination, and cutoff for the chemical system
+being generated.
+
+#### Mean-coordination objective
 
 ```bash
 --guidance="{'mean_coordination': {
-  'coordination_mode': 'soft_count',
   'mode': 'huber',
   'alpha': 3.0,
   'Cu-P': [4, 2.6],
@@ -74,18 +90,44 @@ The existing `mean_coordination` loss supports two definitions, selected by
 }}"
 ```
 
-- `coordination_mode: 'soft_count'`: optional; this is the backward-compatible
-  default.
-- `mode`: can be `l1`, `l2`, or `huber`
-- `alpha`: sigmoid steepness in inverse angstroms; optional, with a default of `2.0`
-- The loss compares the target with the mean sigmoid-weighted coordination of
-  the selected central atoms.
+This objective compares the target with the mean sigmoid-weighted coordination
+of the selected central atoms. For one constraint with target `k`,
 
-#### k-th-neighbor boundary loss
+  $$
+  \bar C = \frac{1}{N_A}\sum_{a=1}^{N_A} C_a,
+  \qquad
+  \mathcal L_{\mathrm{mean}} = \rho(\bar C-k),
+  $$
+
+where $\rho$ is selected by `mode` and can be L1, L2, or Huber loss.
+
+#### Target-coordination-share objective
 
 ```bash
---guidance="{'mean_coordination': {
-  'coordination_mode': 'kth_neighbor',
+--guidance="{'target_coordination_share': {
+  'Co-O': [5, 2.42, 0.5]
+}}"
+```
+
+This objective guides the fraction of central atoms having the requested soft
+coordination:
+
+  $$
+  H_a(k) = \exp\!\left[-\left(\frac{C_a-k}{\tau}\right)^2\right],
+  \qquad
+  \mathcal L_{\mathrm{share}}
+  = 1-\frac{1}{N_A}\sum_{a=1}^{N_A}H_a(k).
+  $$
+
+In `[target_CN, cutoff_radius, tau]`, `tau` is dimensionless and defaults to
+`0.5`.
+
+#### Ranked-coordination softplus objective
+
+Illustrative configuration:
+
+```bash
+--guidance="{'ranked_coordination': {
   'margin': 0.05,
   'temperature': 0.10,
   'Co-O': [5, 2.42]
@@ -93,32 +135,72 @@ The existing `mean_coordination` loss supports two definitions, selected by
 ```
 
 For every central `Co` atom, the current periodic `Co-O` distances are sorted.
-For target coordination `k=5`, the loss pulls the fifth O neighbor inside
-`r_cut - margin` and pushes the sixth O neighbor outside `r_cut + margin`.
-The two penalties are smooth softplus functions of the selected distances.
+For target coordination `k=5`, the loss pulls every O neighbor ranked 1 through
+5 toward the inside of `r_cut - margin` and pushes every neighbor ranked above
+5 toward the outside of `r_cut + margin`. Each penalty is a smooth softplus
+function, so the force becomes exponentially small once that neighbor satisfies
+its assigned margin.
 
-- `coordination_mode: 'kth_neighbor'`: selects the new behavior without adding
-  another registered loss name.
+For central atom $a$, let $d_{a,(i)}$ be its $i$-th nearest periodic neighbor,
+$k$ the target coordination, $r_c$ the cutoff, $m$ the margin, $T$ the
+temperature, and $M$ the number of candidate neighbor images. Every selected
+neighbor atom is expanded over the $3\times3\times3=27$ cells with shifts in
+$\{-1,0,1\}^3$. For overlapping center and neighbor species, only the
+zero-shift image of the atom itself is excluded; its other periodic images
+remain valid neighbors. The per-center loss is
+
+$$
+\mathcal L_a^{\mathrm{softplus}} =
+T\sum_{i=1}^{k}
+\operatorname{softplus}\!\left(\frac{d_{a,(i)}-(r_c-m)}{T}\right)
++T\sum_{i=k+1}^{M}
+\operatorname{softplus}\!\left(\frac{(r_c+m)-d_{a,(i)}}{T}\right),
+$$
+
+with $\operatorname{softplus}(x)=\log(1+e^x)$. The structure loss is the mean
+of $\mathcal L_a^{\mathrm{softplus}}$ over the selected central atoms, and
+losses from multiple species constraints are summed.
+
 - `margin`: safety interval around the cutoff in angstroms; default `0.05`.
 - `temperature`: softplus smoothing width in angstroms; default `0.10`. Smaller
   values approach a hinge loss.
-- The resulting loss has units of angstroms, so its guidance weight is not
-  numerically equivalent to the dimensionless sigmoid-count loss weight.
-- The target coordination `k` must be a non-negative integer. For `k=0`, only
-  the nearest neighbor is pushed outside the cutoff margin.
-- `mode` and `alpha` belong to the sigmoid-weighted formulation and are ignored
-  in `kth_neighbor` mode.
+- The resulting loss has units of angstroms. Calibrate its guidance weight
+  independently from weights used for dimensionless sigmoid-count losses.
+- The target coordination `k` must be a non-negative integer. For `k=0`, all
+  candidate neighbors are assigned to the outside group, so every neighbor
+  inside the cutoff receives an outward gradient.
 - A pair-specific override can be written as
   `[target_CN, cutoff_radius, margin, temperature]`, for example
   `'Co-O': [5, 2.42, 0.05, 0.10]`.
 - Sorting is differentiable with respect to the currently selected distances
   except at exact distance ties, where the ranking changes. Autograd follows
   the ordering returned for that step.
-- The same switch is accepted by the existing `environment`,
-  `target_coordination_share`, and `target_coordination` aliases. In
-  `kth_neighbor` mode they return the direct boundary penalty.
 
-The following pair and group syntax is shared by both modes:
+#### Sigmoid soft count
+
+For central atom $a$, the differentiable coordination number is
+
+$$
+C_a = \sum_{b\in B,\,\mathbf n}
+\sigma\!\left[\alpha\left(r_{c,a}-d_{ab\mathbf n}\right)\right]
+\; - \; \mathbf 1\!\left[Z_a\in B\right],
+\qquad
+\sigma(x)=\frac{1}{1+e^{-x}},
+$$
+
+where $b$ runs over the selected neighbor species and $\mathbf n$ over the 27
+periodic images. The indicator supplies the implementation's unit
+self-interaction correction when the center species also belongs to the
+neighbor set. The objectives then aggregate $C_a$ using the mean or
+target-share formulas above.
+
+- This statistic supplies $C_a$ to `mean_coordination` and
+  `target_coordination_share`.
+- `alpha` is the sigmoid steepness in inverse angstroms and defaults to `2.0`.
+
+#### Pair and grouped-species constraint syntax
+
+The following constraint syntax is shared by all three coordination objectives:
 
 - `A-B`: `[target_CN, cutoff_radius]`
 - `A-B`: `int`; in this case the cutoff is the sum of the covalent radii plus
@@ -136,22 +218,6 @@ The following pair and group syntax is shared by both modes:
   `B` atom as its own neighbor; this self-interaction correction applies only to
   the `B` centers.
 - Multiple atom-pair environments may be defined.
-
-### 🎯 Target-Coordination Share Objective
-
-```bash
---guidance="{'target_coordination_share': {'Co-O': [5, 2.42]}}"
-```
-
-- Guides the fraction of central atoms having the requested coordination.
-- Here, `5` is the target coordination number and `2.42` is the cutoff in
-  angstroms.
-- First, each soft coordination number is computed with the distance sigmoid
-  `CN_i = sum_j sigmoid(alpha * (r_cut - r_ij))`; `alpha` defaults to `2.0`
-  inverse angstroms.
-- Then a Gaussian window in coordination-number space evaluates the target
-  match as `exp(-((CN_i - target_CN) / tau)^2)`. The optional third list value
-  is this dimensionless `tau`; it defaults to `0.5`.
 
 ### 🏢 Volume Objective
 
@@ -238,17 +304,21 @@ required. The guidance execution settings are:
 | `guidance.settings.back_step` | `--back-step` | `2` | Backward-guidance updates per step |
 | `guidance.settings.algorithm` | `--algorithm` | `0` | Placement of corrections in the sampling loop |
 
-Despite its name, `diffusion_guidance_factor` remains a top-level generation
-setting because it controls classifier-free conditioning, not the selected loss
-guidance.
+`diffusion_guidance_factor` is a top-level generation setting that controls
+classifier-free conditioning. The selected loss guidance uses the settings in
+`guidance.settings`.
 
-Runnable YAML examples cover every canonical guidance configuration:
+Runnable YAML examples are organized by objective; grouped species remain
+constraint syntax within those objectives:
 
-- [mean coordination, including grouped species](examples/multiple_runs/mean_coordination.yaml)
-- [k-th-neighbor coordination](examples/multiple_runs/kth_neighbor.yaml)
-- [target coordination share](examples/multiple_runs/target_coordination_share.yaml)
-- [target volume](examples/multiple_runs/volume.yaml)
-- [target volume per atom](examples/multiple_runs/volume_per_atom.yaml)
+- `mean_coordination`:
+  [mean soft coordination with grouped species](examples/multiple_runs/mean_coordination.yaml)
+- `target_coordination_share`:
+  [soft target-coordination share](examples/multiple_runs/target_coordination_share.yaml)
+- `ranked_coordination`:
+  [ranked-neighbor softplus](examples/multiple_runs/kth_neighbor.yaml)
+- `volume`: [target cell volume](examples/multiple_runs/volume.yaml)
+- `volume_pa`: [target volume per atom](examples/multiple_runs/volume_per_atom.yaml)
 
 The main non-guidance settings are:
 

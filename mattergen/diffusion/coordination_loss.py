@@ -162,6 +162,25 @@ def _normalize_coordination_mode(coordination_mode: str) -> str:
         ) from exc
 
 
+def _validate_soft_count_objective_config(target: dict, objective_name: str) -> None:
+    """Reject ranked-softplus options on objectives defined from soft counts."""
+    coordination_mode = _normalize_coordination_mode(
+        target.get("coordination_mode", DEFAULT_COORDINATION_MODE)
+    )
+    if coordination_mode != "soft_count":
+        raise ValueError(
+            f"'{objective_name}' is defined from sigmoid soft counts; use "
+            "'ranked_coordination' for the ranked-neighbor softplus penalty."
+        )
+    ranked_options = sorted({"margin", "temperature"}.intersection(target))
+    if ranked_options:
+        options = ", ".join(repr(option) for option in ranked_options)
+        raise ValueError(
+            f"{options} are ranked_coordination options and are not valid for "
+            f"'{objective_name}'."
+        )
+
+
 def _validate_target_coordination(target: float) -> int:
     target_float = float(target)
     if not math.isfinite(target_float) or not target_float.is_integer():
@@ -189,12 +208,15 @@ def _coordination_margin_penalties_per_A_single(
     temperature: float = DEFAULT_COORDINATION_TEMPERATURE,
 ) -> torch.Tensor:
     """
-    Return the k-th-neighbor softplus margin penalty for every central A atom.
+    Return the ranked-neighbor softplus margin penalty for every central A atom.
 
-    For target coordination k > 0, d_(k) is pulled below r_cut - margin and
-    d_(k+1) is pushed above r_cut + margin. For k = 0, only the nearest
-    neighbor is pushed outside. The distances include 27 periodic B images,
-    with only the zero-shift self-image excluded.
+    For target coordination k, every d_(i) with i <= k is pulled below
+    r_cut - margin and every d_(i) with i > k is pushed above r_cut + margin.
+    Thus, all neighbors on the wrong side of the coordination sphere receive
+    a useful gradient, rather than only d_(k) and d_(k+1). The softplus tails
+    make the force on neighbors that already satisfy their margin decay
+    smoothly. The distances include 27 periodic B images, with only the
+    zero-shift self-image excluded.
     """
     frac = torch.as_tensor(
         frac,
@@ -272,17 +294,34 @@ def _coordination_margin_penalties_per_A_single(
             f"Not enough B-neighbor images to define d_({target_int + 1})."
         )
 
-    push_extra_outside = temperature * torch.nn.functional.softplus(
-        ((r_cut_per_A + margin) - d_k_plus_1) / temperature
-    )
+    # Preserve the per-neighbor force scale of the former d_(k)/d_(k+1)
+    # objective by summing, rather than averaging, over ranked neighbors.
+    outside_distances = ordered_distances[:, target_int:]
+    push_extra_outside = (
+        temperature
+        * torch.nn.functional.softplus(
+            (
+                (r_cut_per_A + margin).unsqueeze(1)
+                - outside_distances
+            )
+            / temperature
+        )
+    ).sum(dim=1)
     if target_int == 0:
         return push_extra_outside
 
-    d_k = ordered_distances[:, target_int - 1]
-    pull_k_inside = temperature * torch.nn.functional.softplus(
-        (d_k - (r_cut_per_A - margin)) / temperature
-    )
-    return pull_k_inside + push_extra_outside
+    inside_distances = ordered_distances[:, :target_int]
+    pull_required_inside = (
+        temperature
+        * torch.nn.functional.softplus(
+            (
+                inside_distances
+                - (r_cut_per_A - margin).unsqueeze(1)
+            )
+            / temperature
+        )
+    ).sum(dim=1)
+    return pull_required_inside + push_extra_outside
 
 
 def _soft_neighbor_counts_per_A_single(
@@ -375,35 +414,12 @@ def _compute_target_coordination_share_single(
     tau: float = 0.5,
     r_cut: float | None = None,
     alpha: float = DEFAULT_COORDINATION_ALPHA,
-    coordination_mode: str = DEFAULT_COORDINATION_MODE,
-    margin: float = DEFAULT_COORDINATION_MARGIN,
-    temperature: float = DEFAULT_COORDINATION_TEMPERATURE,
 ) -> torch.Tensor:
     """
-    Compute one structure's coordination objective.
+    Compute one structure's sigmoid-soft-count target-coordination share.
 
-    In ``soft_count`` mode this returns the original share,
-    (1/|A|) sum_i exp(-((C_i-target)/tau)^2). In ``kth_neighbor`` mode it
-    returns the mean k-th-neighbor softplus margin penalty instead. The
-    enclosing existing loss function handles the two return conventions.
+    Returns (1/|A|) sum_i exp(-((C_i-target)/tau)^2).
     """
-    coordination_mode = _normalize_coordination_mode(coordination_mode)
-    if coordination_mode == "kth_neighbor":
-        penalties = _coordination_margin_penalties_per_A_single(
-            cell,
-            frac,
-            types,
-            type_A,
-            type_B,
-            target=target,
-            r_cut=r_cut,
-            margin=margin,
-            temperature=temperature,
-        )
-        if penalties.numel() == 1 and penalties.squeeze().abs().sum() == 0:
-            return penalties.squeeze()
-        return penalties.mean()
-
     C = _soft_neighbor_counts_per_A_single(
         cell, frac, types, type_A, type_B, r_cut=r_cut, alpha=alpha
     )
@@ -426,16 +442,11 @@ def compute_target_coordination_share(
     tau: float = 0.5,
     r_cut: float | None = None,
     alpha: float = DEFAULT_COORDINATION_ALPHA,
-    coordination_mode: str = DEFAULT_COORDINATION_MODE,
-    margin: float = DEFAULT_COORDINATION_MARGIN,
-    temperature: float = DEFAULT_COORDINATION_TEMPERATURE,
 ) -> torch.Tensor:
     """
-    Batched coordination objective. Returns (B,) if batched, scalar if single.
+    Batched sigmoid-soft-count target share.
 
-    The default ``soft_count`` mode returns the original target share.
-    ``kth_neighbor`` returns the direct softplus margin penalty selected by the
-    same existing function rather than defining a new loss type.
+    Returns (B,) if batched, scalar if single.
     """
     if cell.ndim == 2:
         cell = cell.unsqueeze(0); squeeze_out = True
@@ -454,9 +465,6 @@ def compute_target_coordination_share(
             tau=tau,
             r_cut=r_cut,
             alpha=alpha,
-            coordination_mode=coordination_mode,
-            margin=margin,
-            temperature=temperature,
         )
         results.append(res)
         count = count_
@@ -469,33 +477,25 @@ def compute_target_share(*args, **kwargs) -> torch.Tensor:
     return compute_target_coordination_share(*args, **kwargs)
 
 
-# --- New loss: maximize fraction at exact target coordination (minimize 1 - share) ---
+# --- Target-coordination objective (share aggregation in soft-count mode) ---
 def target_coordination_share_loss(
     x: ChemGraph,
     t: Any,
     target: dict,
     alpha: float = DEFAULT_COORDINATION_ALPHA,
     default_tau: float = 0.5,
-    default_margin: float = DEFAULT_COORDINATION_MARGIN,
-    default_temperature: float = DEFAULT_COORDINATION_TEMPERATURE,
 ) -> torch.Tensor:
     """
-    Target-coordination guidance. For each A-B in `target` with integer neighbor target k, minimize 1 - share_A(k; B),
-    where share_A(k; B) is computed with a Gaussian window of width `tau` in coordination space.
+    Maximize the sigmoid-soft-count target-coordination share.
 
-    The default ``coordination_mode='soft_count'`` preserves the original
-    ``1 - share`` behavior. With ``coordination_mode='kth_neighbor'``, the same
-    registered loss instead returns the direct softplus boundary penalty.
+    Each A-B target minimizes 1 - share_A(k; B), where the share is computed
+    with a Gaussian window of width ``tau`` in coordination space.
 
     `target` can be:
       {'alpha': 3.0, 'A-B': k}
       {'A-B': k}
       {'A-B': [k, r_cut]}
       {'A-B': [k, r_cut, tau]}
-      {'coordination_mode': 'kth_neighbor', 'margin': 0.05,
-       'temperature': 0.10, 'A-B': [k, r_cut]}
-      {'coordination_mode': 'kth_neighbor',
-       'A-B': [k, r_cut, margin, temperature]}
       {'A-[B,C,D]': k}
       {'[A,B,C]-D': k}
     """
@@ -509,12 +509,8 @@ def target_coordination_share_loss(
     frac = x.pos
     atomic_numbers = x.atomic_numbers
     num_atoms = x.num_atoms
+    _validate_soft_count_objective_config(target, "target_coordination_share")
     alpha = float(target.get("alpha", alpha))
-    coordination_mode = _normalize_coordination_mode(
-        target.get("coordination_mode", DEFAULT_COORDINATION_MODE)
-    )
-    default_margin = float(target.get("margin", default_margin))
-    default_temperature = float(target.get("temperature", default_temperature))
 
     objectives = []
     for species_pair, val in target.items():
@@ -524,26 +520,11 @@ def target_coordination_share_loss(
         if isinstance(val, (list, tuple)):
             tgt = float(val[0])
             rcut = (None if len(val) < 2 or val[1] is None else float(val[1]))
-            if coordination_mode == "kth_neighbor":
-                margin = (
-                    default_margin if len(val) < 3 or val[2] is None else float(val[2])
-                )
-                temperature = (
-                    default_temperature
-                    if len(val) < 4 or val[3] is None
-                    else float(val[3])
-                )
-                tau = default_tau
-            else:
-                tau = (default_tau if len(val) < 3 or val[2] is None else float(val[2]))
-                margin = default_margin
-                temperature = default_temperature
+            tau = (default_tau if len(val) < 3 or val[2] is None else float(val[2]))
         else:
             tgt = float(val)
             rcut = None
             tau = default_tau
-            margin = default_margin
-            temperature = default_temperature
 
         ZAs, ZBs = _parse_coordination_constraint(species_pair)
 
@@ -554,9 +535,6 @@ def target_coordination_share_loss(
             tau=tau,
             r_cut=rcut,
             alpha=alpha,
-            coordination_mode=coordination_mode,
-            margin=margin,
-            temperature=temperature,
         )  # (B,)
         objectives.append(objective)
 
@@ -566,8 +544,6 @@ def target_coordination_share_loss(
         return zeros * 0.0
 
     objectives_tensor = torch.stack(objectives, dim=0)  # (P, B)
-    if coordination_mode == "kth_neighbor":
-        return objectives_tensor.sum(dim=0)
     loss = 1.0 - objectives_tensor
     return loss.sum(dim=0)
 
@@ -591,17 +567,9 @@ def compute_mean_coordination(
         type_B: int | list[int] | tuple[int, ...] | set[int],
         r_cut: float | None = None,
         alpha: float = DEFAULT_COORDINATION_ALPHA,
-        coordination_mode: str = DEFAULT_COORDINATION_MODE,
-        target: float | None = None,
-        margin: float = DEFAULT_COORDINATION_MARGIN,
-        temperature: float = DEFAULT_COORDINATION_TEMPERATURE,
 ) -> torch.Tensor:
     """
-    Batched A-B coordination objective selected by ``coordination_mode``.
-
-    ``soft_count`` (default) returns the original mean soft coordination,
-    mean_i sum_j g(d_ij). ``kth_neighbor`` returns the mean direct softplus
-    margin penalty and therefore requires an integer ``target``.
+    Batched mean sigmoid-soft-count coordination, mean_i sum_j g(d_ij).
 
     Either `type_A` or `type_B` may be a collection of atomic numbers. Grouped
     centers are pooled before taking the mean. If `r_cut` is omitted, each
@@ -616,39 +584,20 @@ def compute_mean_coordination(
     else:
         squeeze_out = False
 
-    coordination_mode = _normalize_coordination_mode(coordination_mode)
-    if coordination_mode == "kth_neighbor" and target is None:
-        raise ValueError(
-            "target is required when coordination_mode='kth_neighbor'."
-        )
-
     B = cell.shape[0]
     results = []
     count = 0
     for b in range(B):
         count_ = count + num_atoms[b]
-        if coordination_mode == "kth_neighbor":
-            values = _coordination_margin_penalties_per_A_single(
-                cell[b],
-                frac[count:count_],
-                atomic_numbers[count:count_],
-                type_A=type_A,
-                type_B=type_B,
-                target=target,
-                r_cut=r_cut,
-                margin=margin,
-                temperature=temperature,
-            )
-        else:
-            values = _soft_neighbor_counts_per_A_single(
-                cell[b],
-                frac[count:count_],
-                atomic_numbers[count:count_],
-                type_A=type_A,
-                type_B=type_B,
-                r_cut=r_cut,
-                alpha=alpha,
-            )
+        values = _soft_neighbor_counts_per_A_single(
+            cell[b],
+            frac[count:count_],
+            atomic_numbers[count:count_],
+            type_A=type_A,
+            type_B=type_B,
+            r_cut=r_cut,
+            alpha=alpha,
+        )
         # If empty sentinel, just append values.squeeze()
         if values.numel() == 1 and values.squeeze().abs().sum() == 0:
             results.append(values.squeeze())
@@ -661,30 +610,71 @@ def compute_mean_coordination(
     return out
 
 
+def compute_ranked_coordination(
+        cell: torch.Tensor,  # (B, 3, 3) or (3, 3)
+        frac: torch.Tensor,  # (B, N, 3) or (N, 3)
+        atomic_numbers: torch.Tensor,  # (\Sum N_i)
+        num_atoms: torch.Tensor,  # (B,)
+        type_A: int | list[int] | tuple[int, ...] | set[int],
+        type_B: int | list[int] | tuple[int, ...] | set[int],
+        *,
+        target: float,
+        r_cut: float | None = None,
+        margin: float = DEFAULT_COORDINATION_MARGIN,
+        temperature: float = DEFAULT_COORDINATION_TEMPERATURE,
+) -> torch.Tensor:
+    """
+    Batched mean ranked-neighbor softplus penalty for an exact integer target.
+
+    Every rank i <= k is assigned inside the cutoff margin and every rank
+    i > k outside it. Grouped-center penalties are averaged over all centers.
+    Returns (B,) if batched, scalar if single.
+    """
+    if cell.ndim == 2:
+        cell = cell.unsqueeze(0)
+        squeeze_out = True
+    else:
+        squeeze_out = False
+
+    results = []
+    count = 0
+    for b in range(cell.shape[0]):
+        count_ = count + num_atoms[b]
+        penalties = _coordination_margin_penalties_per_A_single(
+            cell[b],
+            frac[count:count_],
+            atomic_numbers[count:count_],
+            type_A=type_A,
+            type_B=type_B,
+            target=target,
+            r_cut=r_cut,
+            margin=margin,
+            temperature=temperature,
+        )
+        if penalties.numel() == 1 and penalties.squeeze().abs().sum() == 0:
+            results.append(penalties.squeeze())
+        else:
+            results.append(penalties.mean())
+        count = count_
+    out = torch.stack(results)
+    return out.squeeze(0) if squeeze_out else out
+
+
 def mean_coordination_loss(
-        x: ChemGraph,
-        t: Any,
-        target: dict,
-        alpha: float = DEFAULT_COORDINATION_ALPHA,
-        default_margin: float = DEFAULT_COORDINATION_MARGIN,
-        default_temperature: float = DEFAULT_COORDINATION_TEMPERATURE,
+    x: ChemGraph,
+    t: Any,
+    target: dict,
+    alpha: float = DEFAULT_COORDINATION_ALPHA,
 ) -> torch.Tensor:
     """
     Computes the pair- or group-coordination loss for a given ChemGraph.
 
-    The default ``coordination_mode='soft_count'`` preserves the original
-    l1/l2/Huber comparison between mean sigmoid coordination and its target.
-    With ``coordination_mode='kth_neighbor'``, the same existing loss returns
-    the direct softplus penalty on d_(k) and d_(k+1). In that mode ``mode`` is
-    ignored, because the two softplus terms are already the loss.
+    Computes an l1/l2/Huber comparison between mean sigmoid-soft-count
+    coordination and its target. Use ``ranked_coordination_loss`` for the
+    direct ranked-neighbor softplus penalty.
 
     Example of target: {'alpha': 3.0, 'O-H': 1, 'O-C': [1,2.0], 'C-C': 2,
                         'H-[Pd,Ni,Pt]': 3, '[H,C]-O': 2}
-    K-th-neighbor example:
-        {'coordination_mode': 'kth_neighbor', 'margin': 0.05,
-         'temperature': 0.10, 'Co-O': [5, 2.42]}
-    A pair can override the global margin and temperature with
-    ``[target, r_cut, margin, temperature]``.
     Meaning that the environment of O should have 1 H and 1 C but with a r_cut
     of 2.0 for C, the environment of C should have 2 C, and H should have a
     total of 3 Pd/Ni/Pt neighbors.
@@ -713,13 +703,9 @@ def mean_coordination_loss(
     num_atoms = x.num_atoms
 
     # Extract mode without mutating the user-provided target dictionary.
+    _validate_soft_count_objective_config(target, "mean_coordination")
     mode = target.get("mode", None)
     alpha = float(target.get("alpha", alpha))
-    coordination_mode = _normalize_coordination_mode(
-        target.get("coordination_mode", DEFAULT_COORDINATION_MODE)
-    )
-    default_margin = float(target.get("margin", default_margin))
-    default_temperature = float(target.get("temperature", default_temperature))
     constraints = [
         (species_pair, val)
         for species_pair, val in target.items()
@@ -732,16 +718,6 @@ def mean_coordination_loss(
         target_value = val[0] if isinstance(val, (list, tuple)) else val
         target_values.append(target_value)
         r_cut = val[1] if isinstance(val, (list, tuple)) and len(val) > 1 else None
-        margin = (
-            val[2]
-            if isinstance(val, (list, tuple)) and len(val) > 2 and val[2] is not None
-            else default_margin
-        )
-        temperature = (
-            val[3]
-            if isinstance(val, (list, tuple)) and len(val) > 3 and val[3] is not None
-            else default_temperature
-        )
         type_As, type_Bs = _parse_coordination_constraint(species_pair)
         f_AB_list.append(
             compute_mean_coordination(
@@ -753,10 +729,6 @@ def mean_coordination_loss(
                 type_B=type_Bs,
                 r_cut=r_cut,
                 alpha=alpha,
-                coordination_mode=coordination_mode,
-                target=target_value,
-                margin=margin,
-                temperature=temperature,
             )
         )
 
@@ -769,9 +741,6 @@ def mean_coordination_loss(
     # Force 2D: (num_pairs, B) with B=1 when single-structure
     if f_AB.ndim == 1:
         f_AB = f_AB.unsqueeze(1)  # (num_pairs, 1)
-
-    if coordination_mode == "kth_neighbor":
-        return f_AB.sum(dim=0)
 
     # Prepare targets to match (num_pairs, B)
     B = f_AB.shape[1]
@@ -794,6 +763,83 @@ def mean_coordination_loss(
         raise ValueError(f"Unknown mode: {mode}. Supported modes are 'l1', 'huber', and 'l2'.")
 
     return loss.sum(dim=0)  # Sum over all pairs to get a single loss value
+
+
+def ranked_coordination_loss(
+    x: ChemGraph,
+    t: Any,
+    target: dict,
+    default_margin: float = DEFAULT_COORDINATION_MARGIN,
+    default_temperature: float = DEFAULT_COORDINATION_TEMPERATURE,
+) -> torch.Tensor:
+    """Direct ranked-neighbor softplus guidance for exact integer coordination."""
+    if not isinstance(x, ChemGraph):
+        raise ValueError("x must be a ChemGraph object")
+
+    cell = x.cell
+    if cell is None:
+        raise ValueError("ChemGraph has no cell attribute set.")
+
+    if "coordination_mode" in target:
+        coordination_mode = _normalize_coordination_mode(target["coordination_mode"])
+        if coordination_mode != "kth_neighbor":
+            raise ValueError(
+                "'ranked_coordination' uses the ranked-neighbor softplus penalty; "
+                "use 'mean_coordination' or 'target_coordination_share' for "
+                "sigmoid soft counts."
+            )
+    invalid_options = sorted({"alpha", "mode"}.intersection(target))
+    if invalid_options:
+        options = ", ".join(repr(option) for option in invalid_options)
+        raise ValueError(
+            f"{options} are sigmoid-soft-count options and are not valid for "
+            "'ranked_coordination'."
+        )
+
+    default_margin = float(target.get("margin", default_margin))
+    default_temperature = float(target.get("temperature", default_temperature))
+    penalties = []
+    for species_pair, val in target.items():
+        if species_pair in COORDINATION_CONFIG_KEYS:
+            continue
+
+        if isinstance(val, (list, tuple)):
+            target_value = float(val[0])
+            r_cut = None if len(val) < 2 or val[1] is None else float(val[1])
+            margin = (
+                default_margin if len(val) < 3 or val[2] is None else float(val[2])
+            )
+            temperature = (
+                default_temperature
+                if len(val) < 4 or val[3] is None
+                else float(val[3])
+            )
+        else:
+            target_value = float(val)
+            r_cut = None
+            margin = default_margin
+            temperature = default_temperature
+
+        type_As, type_Bs = _parse_coordination_constraint(species_pair)
+        penalties.append(
+            compute_ranked_coordination(
+                cell=cell,
+                frac=x.pos,
+                atomic_numbers=x.atomic_numbers,
+                num_atoms=x.num_atoms,
+                type_A=type_As,
+                type_B=type_Bs,
+                target=target_value,
+                r_cut=r_cut,
+                margin=margin,
+                temperature=temperature,
+            )
+        )
+
+    if len(penalties) == 0:
+        zeros = torch.zeros_like(x.num_atoms, dtype=cell.dtype, device=cell.device)
+        return zeros * 0.0
+    return torch.stack(penalties, dim=0).sum(dim=0)
 
 
 def environment_loss(*args, **kwargs) -> torch.Tensor:

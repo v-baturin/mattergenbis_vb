@@ -9,18 +9,22 @@ from mattergen.diffusion.diffusion_loss import (
     DEFAULT_COORDINATION_MODE,
     DEFAULT_COORDINATION_TEMPERATURE,
     INTER_ATOMIC_CUTOFF,
+    LOSS_REGISTRY,
     compute_mean_coordination,
+    compute_ranked_coordination,
     compute_target_share,
     mean_coordination_loss,
+    ranked_coordination_loss,
     target_coordination_loss,
 )
 
 
-def test_default_coordination_alpha_is_two() -> None:
+def test_coordination_defaults() -> None:
     assert DEFAULT_COORDINATION_ALPHA == 2.0
     assert DEFAULT_COORDINATION_MODE == "soft_count"
     assert DEFAULT_COORDINATION_MARGIN == 0.05
     assert DEFAULT_COORDINATION_TEMPERATURE == 0.10
+    assert LOSS_REGISTRY["ranked_coordination"] is ranked_coordination_loss
 
 
 def _group_coordination_system() -> ChemGraph:
@@ -69,7 +73,7 @@ def _grouped_center_system() -> ChemGraph:
     )
 
 
-def _kth_neighbor_system(
+def _ranked_coordination_system(
     oxygen_distances: tuple[float, ...] = (1.0, 2.0, 4.0),
     *,
     requires_grad: bool = False,
@@ -93,50 +97,59 @@ def _kth_neighbor_system(
     )
 
 
-def test_kth_neighbor_mode_matches_two_softplus_terms() -> None:
-    x = _kth_neighbor_system()
+def test_ranked_coordination_sums_softplus_terms_over_all_neighbors() -> None:
+    x = _ranked_coordination_system()
     margin = 0.1
     temperature = 0.2
-    actual = compute_mean_coordination(
+    actual = compute_ranked_coordination(
         cell=x.cell,
         frac=x.pos,
         atomic_numbers=x.atomic_numbers,
         num_atoms=x.num_atoms,
         type_A=Element("Co").Z,
         type_B=Element("O").Z,
-        coordination_mode="kth_neighbor",
         target=2,
         r_cut=2.5,
         margin=margin,
         temperature=temperature,
     )
-    d_k = torch.tensor(2.0)
-    d_k_plus_1 = torch.tensor(4.0)
+    # Include all 27 periodic images, just as the implementation does. The
+    # zero-shift images here give the three shortest distances: 1, 2, and 4 A.
+    shifts = torch.stack(
+        torch.meshgrid(
+            torch.arange(-1, 2),
+            torch.arange(-1, 2),
+            torch.arange(-1, 2),
+            indexing="ij",
+        ),
+        dim=-1,
+    ).reshape(-1, 3)
+    oxygen_frac = x.pos[1:]
+    oxygen_images = (oxygen_frac.unsqueeze(1) + shifts.unsqueeze(0)).reshape(-1, 3)
+    distances = torch.sort(torch.matmul(-oxygen_images, x.cell[0]).norm(dim=-1)).values
     expected = temperature * torch.nn.functional.softplus(
-        (d_k - (2.5 - margin)) / temperature
-    ) + temperature * torch.nn.functional.softplus(
-        ((2.5 + margin) - d_k_plus_1) / temperature
-    )
+        (distances[:2] - (2.5 - margin)) / temperature
+    ).sum() + temperature * torch.nn.functional.softplus(
+        ((2.5 + margin) - distances[2:]) / temperature
+    ).sum()
 
     torch.testing.assert_close(actual, expected.unsqueeze(0))
 
 
-def test_existing_losses_switch_to_same_kth_neighbor_objective() -> None:
-    x = _kth_neighbor_system()
+def test_ranked_coordination_is_a_separate_objective() -> None:
+    x = _ranked_coordination_system()
     target = {
-        "coordination_mode": "kth_neighbor",
         "margin": 0.1,
         "temperature": 0.2,
         "Co-O": [2, 2.5],
     }
-    expected = compute_mean_coordination(
+    expected = compute_ranked_coordination(
         cell=x.cell,
         frac=x.pos,
         atomic_numbers=x.atomic_numbers,
         num_atoms=x.num_atoms,
         type_A=Element("Co").Z,
         type_B=Element("O").Z,
-        coordination_mode="kth_neighbor",
         target=2,
         r_cut=2.5,
         margin=0.1,
@@ -144,42 +157,51 @@ def test_existing_losses_switch_to_same_kth_neighbor_objective() -> None:
     )
 
     torch.testing.assert_close(
-        mean_coordination_loss(x, t=None, target=target),
-        expected,
-    )
-    torch.testing.assert_close(
-        target_coordination_loss(x, t=None, target=target),
+        ranked_coordination_loss(x, t=None, target=target),
         expected,
     )
 
 
-def test_kth_neighbor_gradients_pull_and_push_only_boundary_neighbors() -> None:
-    undercoordinated = _kth_neighbor_system(
-        oxygen_distances=(1.0, 3.0, 4.0),
+@pytest.mark.parametrize(
+    "loss_fn", [mean_coordination_loss, target_coordination_loss]
+)
+def test_soft_count_objectives_reject_ranked_coordination_mode(loss_fn) -> None:
+    x = _ranked_coordination_system()
+    with pytest.raises(ValueError, match="ranked_coordination"):
+        loss_fn(
+            x,
+            t=None,
+            target={"coordination_mode": "kth_neighbor", "Co-O": [2, 2.5]},
+        )
+
+
+def test_ranked_coordination_gradients_engage_all_misclassified_neighbors() -> None:
+    undercoordinated = _ranked_coordination_system(
+        oxygen_distances=(2.4, 2.7, 3.0, 4.0),
         requires_grad=True,
     )
-    under_loss = mean_coordination_loss(
+    under_loss = ranked_coordination_loss(
         undercoordinated,
         t=None,
         target={
-            "coordination_mode": "kth_neighbor",
             "margin": 0.1,
             "temperature": 0.1,
-            "Co-O": [2, 2.0],
+            "Co-O": [3, 2.0],
         },
     )
     under_loss.sum().backward()
+    assert undercoordinated.pos.grad[1, 0] > 0.0
     assert undercoordinated.pos.grad[2, 0] > 0.0
+    assert undercoordinated.pos.grad[3, 0] > 0.0
 
-    overcoordinated = _kth_neighbor_system(
-        oxygen_distances=(1.0, 1.5, 4.0),
+    overcoordinated = _ranked_coordination_system(
+        oxygen_distances=(1.0, 1.4, 1.8, 4.0),
         requires_grad=True,
     )
-    over_loss = mean_coordination_loss(
+    over_loss = ranked_coordination_loss(
         overcoordinated,
         t=None,
         target={
-            "coordination_mode": "kth_neighbor",
             "margin": 0.1,
             "temperature": 0.1,
             "Co-O": [1, 2.0],
@@ -187,37 +209,36 @@ def test_kth_neighbor_gradients_pull_and_push_only_boundary_neighbors() -> None:
     )
     over_loss.sum().backward()
     assert overcoordinated.pos.grad[2, 0] < 0.0
-    torch.testing.assert_close(
-        overcoordinated.pos.grad[3],
-        torch.zeros_like(overcoordinated.pos.grad[3]),
+    assert overcoordinated.pos.grad[3, 0] < 0.0
+    assert overcoordinated.pos.grad[4, 0].abs() < 1e-6
+
+
+def test_ranked_coordination_supports_zero_target() -> None:
+    x = _ranked_coordination_system(
+        oxygen_distances=(1.0, 1.5, 4.0), requires_grad=True
     )
-
-
-def test_kth_neighbor_mode_supports_zero_coordination_target() -> None:
-    x = _kth_neighbor_system(requires_grad=True)
-    loss = mean_coordination_loss(
+    loss = ranked_coordination_loss(
         x,
         t=None,
         target={
-            "coordination_mode": "kth_neighbor",
             "Co-O": [0, 2.0, 0.1, 0.1],
         },
     )
     loss.sum().backward()
 
     assert x.pos.grad[1, 0] < 0.0
-    torch.testing.assert_close(x.pos.grad[2], torch.zeros_like(x.pos.grad[2]))
+    assert x.pos.grad[2, 0] < 0.0
+    assert x.pos.grad[3, 0].abs() < 1e-6
 
 
-def test_kth_neighbor_mode_requires_integer_target() -> None:
-    x = _kth_neighbor_system()
+def test_ranked_coordination_requires_integer_target() -> None:
+    x = _ranked_coordination_system()
 
     with pytest.raises(ValueError, match="non-negative integer"):
-        mean_coordination_loss(
+        ranked_coordination_loss(
             x,
             t=None,
             target={
-                "coordination_mode": "kth_neighbor",
                 "Co-O": [1.5, 2.0],
             },
         )
@@ -270,7 +291,10 @@ def test_group_mean_coordination_loss_accepts_grouped_key_without_mutating_targe
         type_A=type_a,
         type_B=type_bs,
     )
-    target = {"mode": "l1", "H-[Pd, Ni, Pt]": [float(grouped.item()), None]}
+    target = {
+        "mode": "l1",
+        "H-[Pd, Ni, Pt]": [float(grouped.item()), None],
+    }
 
     loss = mean_coordination_loss(x, t=None, target=target)
 
@@ -296,10 +320,38 @@ def test_group_target_coordination_loss_accepts_grouped_key() -> None:
     loss = target_coordination_loss(
         x,
         t=None,
-        target={"H-[Pd, Ni, Pt]": [2.0, None, 0.5]},
+        target={
+            "H-[Pd, Ni, Pt]": [2.0, None, 0.5],
+        },
     )
 
     torch.testing.assert_close(loss, 1.0 - expected_share)
+
+
+def test_ranked_coordination_loss_accepts_grouped_key() -> None:
+    x = _group_coordination_system()
+    type_a = Element("H").Z
+    type_bs = tuple(Element(symbol).Z for symbol in ("Pd", "Ni", "Pt"))
+    expected = compute_ranked_coordination(
+        cell=x.cell,
+        frac=x.pos,
+        atomic_numbers=x.atomic_numbers,
+        num_atoms=x.num_atoms,
+        type_A=type_a,
+        type_B=type_bs,
+        target=2,
+        r_cut=2.5,
+        margin=0.1,
+        temperature=0.2,
+    )
+
+    actual = ranked_coordination_loss(
+        x,
+        t=None,
+        target={"H-[Pd, Ni, Pt]": [2, 2.5, 0.1, 0.2]},
+    )
+
+    torch.testing.assert_close(actual, expected)
 
 
 def test_grouped_centers_use_element_resolved_cutoffs_and_pool_all_centers() -> None:
@@ -331,30 +383,28 @@ def test_grouped_centers_use_element_resolved_cutoffs_and_pool_all_centers() -> 
     torch.testing.assert_close(grouped, pooled)
 
 
-def test_grouped_centers_use_element_resolved_cutoffs_in_kth_neighbor_mode() -> None:
+def test_grouped_centers_use_element_resolved_cutoffs_in_ranked_coordination() -> None:
     x = _grouped_center_system()
     type_as = tuple(Element(symbol).Z for symbol in ("H", "Pd"))
     type_b = Element("Ni").Z
 
-    grouped = compute_mean_coordination(
+    grouped = compute_ranked_coordination(
         cell=x.cell,
         frac=x.pos,
         atomic_numbers=x.atomic_numbers,
         num_atoms=x.num_atoms,
         type_A=type_as,
         type_B=type_b,
-        coordination_mode="kth_neighbor",
         target=1,
     )
     penalty_h, penalty_pd = [
-        compute_mean_coordination(
+        compute_ranked_coordination(
             cell=x.cell,
             frac=x.pos,
             atomic_numbers=x.atomic_numbers,
             num_atoms=x.num_atoms,
             type_A=type_a,
             type_B=type_b,
-            coordination_mode="kth_neighbor",
             target=1,
         )
         for type_a in type_as
@@ -416,7 +466,10 @@ def test_grouped_center_target_coordination_loss_accepts_grouped_key() -> None:
     loss = target_coordination_loss(
         x,
         t=None,
-        target={"alpha": alpha, "[H,Pd]-Ni": [1.0, 2.5, 0.5]},
+        target={
+            "alpha": alpha,
+            "[H,Pd]-Ni": [1.0, 2.5, 0.5],
+        },
     )
 
     torch.testing.assert_close(loss, 1.0 - expected_share)
