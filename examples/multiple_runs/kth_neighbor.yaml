@@ -7,6 +7,10 @@ guidance:
   parameters:
     margin: 0.05
     temperature: 0.10
+    alpha: 2.0
+    cn_tolerance: 0.4
+    cn_temperature: 0.05
+    satisfaction_weight: 1.0
     Co-O: [5, 2.42]
   settings:
     forward_weight: 0.01

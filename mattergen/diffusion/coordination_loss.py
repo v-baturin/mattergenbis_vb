@@ -10,6 +10,9 @@ shifts = None
 DEFAULT_COORDINATION_ALPHA = 2.0
 DEFAULT_COORDINATION_MARGIN = 0.05
 DEFAULT_COORDINATION_TEMPERATURE = 0.10
+DEFAULT_COORDINATION_CN_TOLERANCE = 0.4
+DEFAULT_COORDINATION_CN_TEMPERATURE = 0.05
+DEFAULT_COORDINATION_SATISFACTION_WEIGHT = 1.0
 DEFAULT_COORDINATION_MODE = "soft_count"
 COORDINATION_CONFIG_KEYS = {
     "mode",
@@ -17,6 +20,9 @@ COORDINATION_CONFIG_KEYS = {
     "coordination_mode",
     "margin",
     "temperature",
+    "cn_tolerance",
+    "cn_temperature",
+    "satisfaction_weight",
 }
 
 def _as_atomic_number_tuple(
@@ -193,6 +199,55 @@ def _validate_target_coordination(target: float) -> int:
             "The k-th-neighbor coordination target must be a non-negative integer."
         )
     return target_int
+
+
+def _coordination_satisfaction_per_A(
+    counts: torch.Tensor,
+    *,
+    target: float,
+    tolerance: float = DEFAULT_COORDINATION_CN_TOLERANCE,
+    temperature: float = DEFAULT_COORDINATION_CN_TEMPERATURE,
+) -> torch.Tensor:
+    """Smooth membership in the acceptable ``target +/- tolerance`` CN window."""
+    tolerance = float(tolerance)
+    temperature = float(temperature)
+    if tolerance < 0.0:
+        raise ValueError("coordination-number tolerance must be non-negative.")
+    if temperature <= 0.0:
+        raise ValueError("coordination-number temperature must be positive.")
+
+    lower = float(target) - tolerance
+    upper = float(target) + tolerance
+    return torch.sigmoid((counts - lower) / temperature) * torch.sigmoid(
+        (upper - counts) / temperature
+    )
+
+
+def _mean_ranked_coordination_objective(
+    penalties: torch.Tensor,
+    counts: torch.Tensor,
+    *,
+    target: float,
+    softplus_temperature: float,
+    cn_tolerance: float,
+    cn_temperature: float,
+    satisfaction_weight: float,
+) -> torch.Tensor:
+    """Combine geometric correction with a reward for completed centers."""
+    base_loss = penalties.mean()
+    if satisfaction_weight == 0.0:
+        return base_loss
+
+    satisfaction = _coordination_satisfaction_per_A(
+        counts,
+        target=target,
+        tolerance=cn_tolerance,
+        temperature=cn_temperature,
+    )
+    boundary_scale = float(softplus_temperature) * math.log(2.0)
+    return base_loss + satisfaction_weight * boundary_scale * (
+        1.0 - satisfaction.mean()
+    )
 
 
 def _coordination_margin_penalties_per_A_single(
@@ -622,14 +677,34 @@ def compute_ranked_coordination(
         r_cut: float | None = None,
         margin: float = DEFAULT_COORDINATION_MARGIN,
         temperature: float = DEFAULT_COORDINATION_TEMPERATURE,
+        alpha: float = DEFAULT_COORDINATION_ALPHA,
+        cn_tolerance: float = DEFAULT_COORDINATION_CN_TOLERANCE,
+        cn_temperature: float = DEFAULT_COORDINATION_CN_TEMPERATURE,
+        satisfaction_weight: float = DEFAULT_COORDINATION_SATISFACTION_WEIGHT,
 ) -> torch.Tensor:
     """
     Batched mean ranked-neighbor softplus penalty for an exact integer target.
 
     Every rank i <= k is assigned inside the cutoff margin and every rank
-    i > k outside it. Grouped-center penalties are averaged over all centers.
+    i > k outside it. The mean penalty is supplemented by a smooth reward for
+    centers whose sigmoid coordination lies within k +/- ``cn_tolerance``.
+    Set ``satisfaction_weight=0`` to recover the pure group-softplus objective.
     Returns (B,) if batched, scalar if single.
     """
+    alpha = float(alpha)
+    satisfaction_weight = float(satisfaction_weight)
+    if alpha <= 0.0:
+        raise ValueError("coordination alpha must be positive.")
+    if satisfaction_weight < 0.0:
+        raise ValueError("coordination satisfaction weight must be non-negative.")
+    # Validate even when the structure has no selected centers.
+    _coordination_satisfaction_per_A(
+        torch.zeros(1, dtype=frac.dtype, device=frac.device),
+        target=target,
+        tolerance=cn_tolerance,
+        temperature=cn_temperature,
+    )
+
     if cell.ndim == 2:
         cell = cell.unsqueeze(0)
         squeeze_out = True
@@ -654,7 +729,26 @@ def compute_ranked_coordination(
         if penalties.numel() == 1 and penalties.squeeze().abs().sum() == 0:
             results.append(penalties.squeeze())
         else:
-            results.append(penalties.mean())
+            counts = _soft_neighbor_counts_per_A_single(
+                cell[b],
+                frac[count:count_],
+                atomic_numbers[count:count_],
+                type_A=type_A,
+                type_B=type_B,
+                r_cut=r_cut,
+                alpha=alpha,
+            )
+            results.append(
+                _mean_ranked_coordination_objective(
+                    penalties,
+                    counts,
+                    target=target,
+                    softplus_temperature=temperature,
+                    cn_tolerance=cn_tolerance,
+                    cn_temperature=cn_temperature,
+                    satisfaction_weight=satisfaction_weight,
+                )
+            )
         count = count_
     out = torch.stack(results)
     return out.squeeze(0) if squeeze_out else out
@@ -788,16 +882,28 @@ def ranked_coordination_loss(
                 "use 'mean_coordination' or 'target_coordination_share' for "
                 "sigmoid soft counts."
             )
-    invalid_options = sorted({"alpha", "mode"}.intersection(target))
+    invalid_options = sorted({"mode"}.intersection(target))
     if invalid_options:
         options = ", ".join(repr(option) for option in invalid_options)
         raise ValueError(
-            f"{options} are sigmoid-soft-count options and are not valid for "
+            f"{options} are not valid for "
             "'ranked_coordination'."
         )
 
     default_margin = float(target.get("margin", default_margin))
     default_temperature = float(target.get("temperature", default_temperature))
+    alpha = float(target.get("alpha", DEFAULT_COORDINATION_ALPHA))
+    cn_tolerance = float(
+        target.get("cn_tolerance", DEFAULT_COORDINATION_CN_TOLERANCE)
+    )
+    cn_temperature = float(
+        target.get("cn_temperature", DEFAULT_COORDINATION_CN_TEMPERATURE)
+    )
+    satisfaction_weight = float(
+        target.get(
+            "satisfaction_weight", DEFAULT_COORDINATION_SATISFACTION_WEIGHT
+        )
+    )
     penalties = []
     for species_pair, val in target.items():
         if species_pair in COORDINATION_CONFIG_KEYS:
@@ -833,6 +939,10 @@ def ranked_coordination_loss(
                 r_cut=r_cut,
                 margin=margin,
                 temperature=temperature,
+                alpha=alpha,
+                cn_tolerance=cn_tolerance,
+                cn_temperature=cn_temperature,
+                satisfaction_weight=satisfaction_weight,
             )
         )
 

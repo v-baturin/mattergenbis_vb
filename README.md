@@ -64,7 +64,8 @@ outer guidance key:
 - `target_coordination_share`: maximize the sigmoid-soft-count share at the
   requested coordination number.
 - `ranked_coordination`: directly enforce an integer coordination target with
-  ranked-neighbor softplus boundary penalties.
+  ranked-neighbor softplus boundary penalties and reward completed local
+  environments.
 
 `mean_coordination` and `target_coordination_share` aggregate the same
 differentiable soft-count statistic in different ways. `ranked_coordination`
@@ -130,6 +131,10 @@ Illustrative configuration:
 --guidance="{'ranked_coordination': {
   'margin': 0.05,
   'temperature': 0.10,
+  'alpha': 2.0,
+  'cn_tolerance': 0.4,
+  'cn_temperature': 0.05,
+  'satisfaction_weight': 1.0,
   'Co-O': [5, 2.42]
 }}"
 ```
@@ -157,13 +162,43 @@ T\sum_{i=1}^{k}
 \operatorname{softplus}\!\left(\frac{(r_c+m)-d_{a,(i)}}{T}\right),
 $$
 
-with $\operatorname{softplus}(x)=\log(1+e^x)$. The structure loss is the mean
-of $\mathcal L_a^{\mathrm{softplus}}$ over the selected central atoms, and
-losses from multiple species constraints are summed.
+with $\operatorname{softplus}(x)=\log(1+e^x)$. A sigmoid soft count $C_a$ is
+also used to determine whether the center lies within the acceptable
+coordination interval $[k-\delta_{\mathrm{CN}},k+\delta_{\mathrm{CN}}]$:
+
+$$
+s_a =
+\sigma\!\left(\frac{C_a-(k-\delta_{\mathrm{CN}})}{\tau_{\mathrm{CN}}}\right)
+\sigma\!\left(\frac{(k+\delta_{\mathrm{CN}})-C_a}{\tau_{\mathrm{CN}}}\right).
+$$
+
+The loss for one coordination constraint is
+
+$$
+\mathcal L_q =
+\frac{1}{N_A}\sum_{a=1}^{N_A}\mathcal L_a^{\mathrm{softplus}}
++\lambda T\ln 2
+\left(1-\frac{1}{N_A}\sum_{a=1}^{N_A}s_a\right),
+$$
+
+and losses from multiple coordination constraints $q$ are summed. The first
+term corrects misplaced neighbors. The second gives lower loss to a structure
+containing completed local environments when its mean softplus penalty equals
+that of a structure in which every center remains outside the acceptable CN
+window. The scale $T\ln 2$ is one softplus term evaluated at its boundary, so
+$\lambda$ is dimensionless.
 
 - `margin`: safety interval around the cutoff in angstroms; default `0.05`.
 - `temperature`: softplus smoothing width in angstroms; default `0.10`. Smaller
   values approach a hinge loss.
+- `alpha`: steepness of the sigmoid count used for center classification in
+  inverse angstroms; default `2.0`.
+- `cn_tolerance`: half-width of the acceptable coordination interval; default
+  `0.4`, giving $k\pm0.4$.
+- `cn_temperature`: smooth transition width at the acceptable-CN boundaries;
+  default `0.05` coordination units. At either boundary, $s_a\simeq0.5$.
+- `satisfaction_weight`: dimensionless $\lambda$; default `1.0`. Set it to
+  `0.0` for the pure group-softplus loss.
 - The resulting loss has units of angstroms. Calibrate its guidance weight
   independently from weights used for dimensionless sigmoid-count losses.
 - The target coordination `k` must be a non-negative integer. For `k=0`, all

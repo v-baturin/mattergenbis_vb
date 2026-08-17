@@ -5,8 +5,11 @@ from pymatgen.core import Element
 from mattergen.common.data.chemgraph import ChemGraph
 from mattergen.diffusion.diffusion_loss import (
     DEFAULT_COORDINATION_ALPHA,
+    DEFAULT_COORDINATION_CN_TEMPERATURE,
+    DEFAULT_COORDINATION_CN_TOLERANCE,
     DEFAULT_COORDINATION_MARGIN,
     DEFAULT_COORDINATION_MODE,
+    DEFAULT_COORDINATION_SATISFACTION_WEIGHT,
     DEFAULT_COORDINATION_TEMPERATURE,
     INTER_ATOMIC_CUTOFF,
     LOSS_REGISTRY,
@@ -24,6 +27,9 @@ def test_coordination_defaults() -> None:
     assert DEFAULT_COORDINATION_MODE == "soft_count"
     assert DEFAULT_COORDINATION_MARGIN == 0.05
     assert DEFAULT_COORDINATION_TEMPERATURE == 0.10
+    assert DEFAULT_COORDINATION_CN_TOLERANCE == 0.4
+    assert DEFAULT_COORDINATION_CN_TEMPERATURE == 0.05
+    assert DEFAULT_COORDINATION_SATISFACTION_WEIGHT == 1.0
     assert LOSS_REGISTRY["ranked_coordination"] is ranked_coordination_loss
 
 
@@ -112,6 +118,7 @@ def test_ranked_coordination_sums_softplus_terms_over_all_neighbors() -> None:
         r_cut=2.5,
         margin=margin,
         temperature=temperature,
+        satisfaction_weight=0.0,
     )
     # Include all 27 periodic images, just as the implementation does. The
     # zero-shift images here give the three shortest distances: 1, 2, and 4 A.
@@ -134,6 +141,60 @@ def test_ranked_coordination_sums_softplus_terms_over_all_neighbors() -> None:
     ).sum()
 
     torch.testing.assert_close(actual, expected.unsqueeze(0))
+
+
+def test_center_satisfaction_prefers_one_completed_environment() -> None:
+    from mattergen.diffusion.coordination_loss import (
+        _mean_ranked_coordination_objective,
+    )
+
+    one_completed = _mean_ranked_coordination_objective(
+        penalties=torch.tensor([0.0, 0.4]),
+        counts=torch.tensor([6.0, 4.0]),
+        target=6,
+        softplus_temperature=0.1,
+        cn_tolerance=0.4,
+        cn_temperature=0.05,
+        satisfaction_weight=1.0,
+    )
+    both_incomplete = _mean_ranked_coordination_objective(
+        penalties=torch.tensor([0.2, 0.2]),
+        counts=torch.tensor([5.5, 6.5]),
+        target=6,
+        softplus_temperature=0.1,
+        cn_tolerance=0.4,
+        cn_temperature=0.05,
+        satisfaction_weight=1.0,
+    )
+
+    assert one_completed < both_incomplete
+
+
+def test_zero_satisfaction_weight_recovers_group_softplus() -> None:
+    x = _ranked_coordination_system()
+    target = {
+        "margin": 0.1,
+        "temperature": 0.2,
+        "satisfaction_weight": 0.0,
+        "Co-O": [2, 2.5],
+    }
+    expected = compute_ranked_coordination(
+        cell=x.cell,
+        frac=x.pos,
+        atomic_numbers=x.atomic_numbers,
+        num_atoms=x.num_atoms,
+        type_A=Element("Co").Z,
+        type_B=Element("O").Z,
+        target=2,
+        r_cut=2.5,
+        margin=0.1,
+        temperature=0.2,
+        satisfaction_weight=0.0,
+    )
+
+    torch.testing.assert_close(
+        ranked_coordination_loss(x, t=None, target=target), expected
+    )
 
 
 def test_ranked_coordination_is_a_separate_objective() -> None:
