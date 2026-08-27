@@ -31,7 +31,7 @@ mattergen-generate "results/Li-Co-O_guided_env" \
 | -------------------------------------------------------------------- | ---------------------- | --------------------------------------------------------------------------------- |
 | `output_path`                                                        | `str`                  | Directory to save generated structures                                            |
 | `pretrained_name`                                                    | `str`                  | Name of pretrained model from HuggingFace, check mattergen.md to see all available models (e.g., `chemical_system` to fix the system)               |
-| `model_path`                                                         | `str`                  | Alternative to `pretrained_name`; path to local checkpoint                        |
+| `model_path`                                                         | `str`                  | Path to a local checkpoint, used when `pretrained_name` is omitted                 |
 | `batch_size`                                                         | `int`                  | Number of structures per batch                                                    |
 | `num_batches`                                                        | `int`                  | Number of batches to generate                                                     |
 | `properties_to_condition_on`                                         | `dict`                 | Conditioning properties when a finetuned model has been chosen, like `{'chemical_system':'Li-Co-O'}`                     |
@@ -150,9 +150,9 @@ For central atom $a$, let $d_{a,(i)}$ be its $i$-th nearest periodic neighbor,
 $k$ the target coordination, $r_c$ the cutoff, $m$ the margin, $T$ the
 temperature, and $M$ the number of candidate neighbor images. Every selected
 neighbor atom is expanded over the $3\times3\times3=27$ cells with shifts in
-$\{-1,0,1\}^3$. For overlapping center and neighbor species, only the
-zero-shift image of the atom itself is excluded; its other periodic images
-remain valid neighbors. The per-center loss is
+$\{-1,0,1\}^3$. For overlapping center and neighbor species, the neighbor list
+excludes the atom's zero-shift self-image and retains its other periodic
+images. The per-center loss is
 
 $$
 \mathcal L_a^{\mathrm{softplus}} =
@@ -182,11 +182,20 @@ $$
 $$
 
 and losses from multiple coordination constraints $q$ are summed. The first
-term corrects misplaced neighbors. The second gives lower loss to a structure
-containing completed local environments when its mean softplus penalty equals
-that of a structure in which every center remains outside the acceptable CN
-window. The scale $T\ln 2$ is one softplus term evaluated at its boundary, so
-$\lambda$ is dimensionless.
+term corrects misplaced neighbors. The second rewards completed local
+environments whose soft counts lie in the acceptable CN window. The scale
+$T\ln 2$ is one softplus term evaluated at its boundary, so $\lambda$ is
+dimensionless.
+
+The satisfaction term supplies a local completion signal. Its gradient is
+concentrated near the two boundaries of the acceptable CN window. Far outside
+that window, its sigmoids saturate and its derivative with respect to $C_a$
+becomes nearly zero. Because $C_a$ is itself a sum of sigmoid neighbor weights,
+the gradient with respect to a distance can also become small when that
+neighbor is far from the cutoff. Large coordination errors are corrected by
+the ranked-softplus term, whose gradient remains strong for assigned neighbors
+that violate their margins; the satisfaction term mainly distinguishes
+nearly completed environments.
 
 - `margin`: safety interval around the cutoff in angstroms; default `0.05`.
 - `temperature`: softplus smoothing width in angstroms; default `0.10`. Smaller
@@ -248,10 +257,10 @@ The following constraint syntax is shared by all three coordination objectives:
   all center atoms. Species with more atoms therefore have proportionally more
   weight. Without an explicit cutoff, each center element uses its own default
   pair cutoff; an explicit cutoff is shared by the whole group.
-- A group may appear on only one side. Keys such as `[A,B]-[C,D]` are rejected.
-- Overlapping sides are valid. For example, `[A,B]-B` does not count a central
-  `B` atom as its own neighbor; this self-interaction correction applies only to
-  the `B` centers.
+- Group constraints support a group on one side, such as `A-[B,C,D]` or
+  `[A,B,C]-D`.
+- Overlapping sides are valid. For example, `[A,B]-B` excludes each central
+  `B` atom's self-image from its own neighbor count.
 - Multiple atom-pair environments may be defined.
 
 ### 🏢 Volume Objective
@@ -272,16 +281,13 @@ The following constraint syntax is shared by all three coordination objectives:
 
 ## 🔁 Multiple Guided Runs
 
-Use the repository-root `multiple_runs.sh` to repeat guided generation. This is the
-only runner implementation in the repository. It handles independent runs,
-multiple batches per run, OOM recovery, and result aggregation.
+Use the root-level `multiple_runs.sh` to repeat guided generation. It
+handles independent runs, multiple batches per run, OOM recovery, and result
+aggregation.
 
-There is one guidance interface: pass one complete, one-entry guidance dictionary
-to `--guidance`. The same dictionary format is used by `mattergen-generate`.
-The runner rejects dictionaries containing multiple guidance types. It does not
-assemble guidance from separate CLI options, and it does not accept positional
-arguments or short aliases. Named options use the strict `--option value` form;
-the `--option=value` form is not accepted.
+Pass a complete, one-entry guidance dictionary to `--guidance`, using the same
+dictionary format as `mattergen-generate`. Named options use the `--option value`
+form.
 
 For example, this generates 22 `Ni-Pd-H` structures per batch with
 `CN([Pd,Ni]-H) = 6`:
@@ -295,16 +301,16 @@ For example, this generates 22 `Ni-Pd-H` structures per batch with
     --algorithm 1 --gpu 2
 ```
 
-The only alternative is a YAML input file:
+A YAML configuration can be supplied with `--config`:
 
 ```bash
 ./multiple_runs.sh --config examples/multiple_runs/mean_coordination.yaml
 ```
 
-`--config` must be the only command-line option. YAML uses the long option names
-with underscores instead of hyphens. Its singular `guidance` section requires
-`type` and `parameters`; the optional `settings` mapping controls how that loss
-guides sampling:
+Supply `--config` by itself on the command line. YAML keys use the underscore
+form of the long option names. The `guidance` section contains `type` and
+`parameters`; the optional `settings` mapping controls how that loss guides
+sampling:
 
 ```yaml
 batch_size: 22
@@ -326,9 +332,9 @@ guidance:
 gpu: 2
 ```
 
-The YAML reader starts with the same defaults as the CLI and replaces only
-values present in the file. Only `guidance.type` and `guidance.parameters` are
-required. The guidance execution settings are:
+The YAML reader overlays the supplied values on the CLI defaults. The required
+fields are `guidance.type` and `guidance.parameters`. The guidance execution
+settings are:
 
 | YAML setting | CLI option | Default | Meaning |
 | --- | --- | --- | --- |
