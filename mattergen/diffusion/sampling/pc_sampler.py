@@ -48,6 +48,26 @@ def _prepare_guidance_grad(
     return g * mask
 
 
+def _compute_guidance_grads(
+    diffusion_loss: torch.Tensor,
+    data: Diffusable,
+    fields: tuple[str, ...] = ("pos", "cell"),
+) -> dict[str, torch.Tensor]:
+    """Compute all first-order guidance gradients in one autograd traversal."""
+    inputs = [getattr(data, field) for field in fields]
+    grads = torch.autograd.grad(
+        diffusion_loss,
+        inputs,
+        grad_outputs=torch.ones_like(diffusion_loss),
+        create_graph=False,
+        allow_unused=True,
+    )
+    return {
+        field: torch.zeros_like(input_tensor) if grad is None else grad
+        for field, input_tensor, grad in zip(fields, inputs, grads)
+    }
+
+
 class PredictorCorrector(Generic[Diffusable]):
     """Generates samples using predictor-corrector sampling."""
 
@@ -211,22 +231,11 @@ class PredictorCorrector(Generic[Diffusable]):
 
     def _backward_guidance(self, x0: Diffusable, t: torch.Tensor, score) -> Diffusable:
             """Update the score with the backward universal guidance function."""
-            grad_dict = {}
-            replace_kwargs = ["pos", "cell"]
             with torch.set_grad_enabled(True):
                 diffusion_loss = self.diffusion_loss_fn(x0, t)
             if self.print_loss_history:
                 self.diffusion_loss_history.append(diffusion_loss.cpu().tolist())
-            for field in replace_kwargs:
-                grad = torch.autograd.grad(
-                    diffusion_loss, getattr(x0, field),
-                    grad_outputs=torch.ones_like(diffusion_loss),
-                    create_graph=True,
-                    allow_unused=True
-                )[0]
-                if grad is None:
-                    grad = torch.zeros_like(getattr(x0, field))
-                grad_dict[field] = grad
+            grad_dict = _compute_guidance_grads(diffusion_loss, x0)
             #if grad_dict['pos'].sum() != 0 or grad_dict['cell'].sum() != 0:
             #   print(grad_dict, diffusion_loss)
             for k in grad_dict:
@@ -251,22 +260,11 @@ class PredictorCorrector(Generic[Diffusable]):
                 atomic_numbers=self._predictors['atomic_numbers'].corruption._to_non_zero_based(torch.distributions.Categorical(logits=score["atomic_numbers"]).sample()),
                 t=t,
             )
-        grad_dict = {}
-        replace_kwargs = ["pos", "cell"]
         with torch.set_grad_enabled(True):
             diffusion_loss = self.diffusion_loss_fn(x0, t)
         if self.print_loss_history:
             self.diffusion_loss_history.append(diffusion_loss.cpu().tolist())
-        for field in replace_kwargs:
-            grad = torch.autograd.grad(
-                diffusion_loss, getattr(batch_, field),
-                grad_outputs=torch.ones_like(diffusion_loss),
-                create_graph=True,
-                allow_unused=True
-            )[0]
-            if grad is None:
-                grad = torch.zeros_like(getattr(x0, field))
-            grad_dict[field] = grad
+        grad_dict = _compute_guidance_grads(diffusion_loss, batch_)
         #if grad_dict['pos'].sum() != 0 or grad_dict['cell'].sum() != 0:
         #        print(grad_dict, diffusion_loss)
         for k in grad_dict:
